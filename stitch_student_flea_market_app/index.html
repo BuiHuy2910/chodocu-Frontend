@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>PassUni - Chợ Đồ Cũ Sinh Viên</title>
+</head>
+<body>
+  <script>
+    const token = localStorage.getItem('passuni_token');
+    if (!token) {
+      window.location.replace('./dang_nhap_dang_ky/index.html');
+    } else {
+      window.location.replace('./trang_ch_kh_m_ph/code.html');
+    }
+  </script>
+</body>
+</html>

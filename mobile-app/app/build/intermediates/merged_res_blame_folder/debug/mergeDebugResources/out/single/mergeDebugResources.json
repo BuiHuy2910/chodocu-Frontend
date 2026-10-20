@@ -1,0 +1,6 @@
+[
+    {
+        "merged": "com.chodocu.app-debug-54:/xml_network_security_config.xml.flat",
+        "source": "com.chodocu.app-main-56:/xml/network_security_config.xml"
+    }
+]
