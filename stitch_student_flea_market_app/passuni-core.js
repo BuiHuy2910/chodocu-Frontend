@@ -311,7 +311,7 @@ function openStudentProfilePopup() {
               <p class="text-[10px] text-slate-500">Món đồ đã lưu</p>
             </div>
           </button>
-          <a href="../admin-web/index.html" class="p-3 rounded-2xl bg-[#ECFDF5] hover:bg-emerald-100/70 border border-[#A7F3D0] flex items-center gap-2.5 text-left">
+          <a href="../../../chodocu-admin/index.html" class="p-3 rounded-2xl bg-[#ECFDF5] hover:bg-emerald-100/70 border border-[#A7F3D0] flex items-center gap-2.5 text-left">
             <span class="material-symbols-outlined text-[#006948]">admin_panel_settings</span>
             <div>
               <p class="text-xs font-bold text-[#006948]">Trang Web Admin</p>
