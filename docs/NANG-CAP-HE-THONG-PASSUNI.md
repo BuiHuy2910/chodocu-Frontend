@@ -758,6 +758,71 @@ suspend fun login(@Body body: @JvmSuppressWildcards Map<String, Any?>): Response
   tình trạng "đăng nhập nửa vời".
 - Map thêm mã lỗi `404` → "Không tìm thấy API trên Supabase (kiểm tra AppConfig.SUPABASE_URL)".
 
+---
+
+## 18. Dữ liệu mẫu mở rộng (seed v2)
+
+### 18.1. Vì sao phải đổi avatar
+
+Avatar cũ dùng `https://api.dicebear.com/7.x/notionists/svg?seed=...` → trả về **`image/svg+xml`**.
+App chỉ khai báo `io.coil-kt:coil-compose` (không có `coil-svg`) nên **Coil không giải mã được SVG**
+→ avatar trống trong mọi màn hình.
+
+Đã đổi sang `https://i.pravatar.cc/300?img=N` (**JPEG**), mỗi tài khoản một ảnh khác nhau
+(đa dạng giới tính / độ tuổi / phong cách). Ảnh sản phẩm vẫn dùng Unsplash (JPEG).
+
+> Nếu sau này muốn dùng lại SVG thì phải thêm dependency:
+> `implementation("io.coil-kt:coil-svg:2.7.0")` + `ImageLoader` có `SvgDecoder`.
+
+### 18.2. Quy mô dữ liệu mới
+
+| Bảng | Số dòng | Ghi chú |
+|---|---|---|
+| `universities` | 8 | Thêm TDTU, SPKT, Y Dược |
+| `categories` | 8 | Giữ nguyên |
+| `users` | 23 | 1 ADMIN, 1 MODERATOR, 18 STUDENT (`password123`) + 3 tài khoản demo |
+| `products` | 25 | 14 APPROVED · 6 PENDING · 3 SOLD · 1 IN_TRANSACTION · 1 HIDDEN |
+| `product_images` | 34 | 1–2 ảnh/tin |
+| `order_requests` | 8 | Đủ 6 trạng thái, gồm 1 `DISPUTED` |
+| `transactions` | 3 | Sinh từ đơn COMPLETED |
+| `reviews` | 3 | Đánh giá 4–5 sao |
+| `wishlists` | 14 | 14 cặp (user, sản phẩm) |
+| `chat_messages` | 10 | 5 cuộc hội thoại có ngữ cảnh sản phẩm |
+| `notifications` | 8 | Duyệt bài, đơn mới, tranh chấp, bị ẩn |
+| `moderation_logs` | 4 | Audit duyệt / ẩn bài |
+
+### 18.3. Tài khoản demo
+
+| Email | Mật khẩu | Vai trò |
+|---|---|---|
+| `admin@chodocu.edu.vn` | `admin123` | ADMIN (trang admin) |
+| `minhthu@student.vnuhcm.edu.vn` | `123456` | STUDENT (nút "Đăng nhập demo · Người bán") |
+| `hoangphuc@uit.edu.vn` | `123456` | STUDENT (nút "Đăng nhập demo · Người mua") |
+| `admin@passuni.vn`, `mod@passuni.vn` | `password123` | ADMIN / MODERATOR |
+| 15 tài khoản sinh viên khác | `password123` | STUDENT |
+
+### 18.4. Sửa kèm theo trong `database_schema.sql`
+
+Constraint cũ `order_requests_status_check` chỉ cho `PENDING/ACCEPTED/COMPLETED/REJECTED/CANCELLED`
+→ chặn luồng khiếu nại. Đã thay bằng:
+
+```sql
+ALTER TABLE order_requests ADD CONSTRAINT chk_order_requests_status
+    CHECK (status IN ('PENDING','ACCEPTED','COMPLETED','REJECTED','CANCELLED','DISPUTED'));
+```
+
+### 18.5. Chạy lại từ đầu (khi cần reset dữ liệu demo)
+
+```sql
+truncate table moderation_logs, notifications, reviews, reports, chat_messages,
+    wishlists, transactions, order_requests, product_images, products,
+    app_sessions, users, categories, universities, platform_fee_tiers
+restart identity cascade;
+
+-- sau đó chạy lại: database_schema.sql → seed_data.sql → supabase_direct_setup.sql
+```
+
+
 
 
 
