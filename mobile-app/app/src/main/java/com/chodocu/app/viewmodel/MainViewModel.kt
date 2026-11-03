@@ -4,8 +4,11 @@ import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.chodocu.app.core.AppConfig
 import com.chodocu.app.data.api.RetrofitClient
 import com.chodocu.app.data.model.*
+import com.chodocu.app.data.supabase.SupabaseRepository
+import com.chodocu.app.data.supabase.SupabaseSession
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -93,6 +96,25 @@ class MainViewModel : ViewModel() {
     fun loadInitialData() {
         viewModelScope.launch {
             _isLoading.value = true
+
+            // Chế độ gọi thẳng Supabase: không cần backend Spring Boot
+            if (AppConfig.USE_SUPABASE_DIRECT) {
+                try {
+                    _categories.value = SupabaseRepository.categories()
+                    _universities.value = SupabaseRepository.universities()
+                    _products.value = SupabaseRepository.feed()
+                } catch (e: Exception) {
+                    showPopup(
+                        title = "Không tải được dữ liệu",
+                        message = e.message ?: "Kiểm tra kết nối mạng và cấu hình Supabase.",
+                        type = PopupType.WARNING
+                    )
+                } finally {
+                    _isLoading.value = false
+                }
+                return@launch
+            }
+
             try {
                 val catRes = api.getCategories()
                 if (catRes.isSuccessful && catRes.body()?.data != null) {
@@ -127,6 +149,15 @@ class MainViewModel : ViewModel() {
         _selectedUniversityId.value = universityId
 
         viewModelScope.launch {
+            if (AppConfig.USE_SUPABASE_DIRECT) {
+                _products.value = try {
+                    SupabaseRepository.feed(keyword, categoryId, universityId, minPrice, maxPrice)
+                } catch (_: Exception) {
+                    emptyList()
+                }
+                return@launch
+            }
+
             try {
                 val res = api.searchProducts(
                     keyword = keyword?.ifBlank { null },
@@ -148,6 +179,24 @@ class MainViewModel : ViewModel() {
 
     fun login(email: String, password: String, onSuccess: () -> Unit) {
         viewModelScope.launch {
+            if (AppConfig.USE_SUPABASE_DIRECT) {
+                try {
+                    val auth = SupabaseRepository.login(email, password)
+                    _currentUser.value = auth.user
+                    loadUserScopedData()
+                    showPopup(
+                        title = "Đăng nhập thành công",
+                        message = "Chào mừng ${auth.user.fullName}.",
+                        type = PopupType.SUCCESS,
+                        onConfirm = onSuccess
+                    )
+                    fetchProducts()
+                } catch (e: Exception) {
+                    showPopup("Đăng nhập thất bại", e.message ?: "Không thể đăng nhập.", PopupType.ERROR)
+                }
+                return@launch
+            }
+
             try {
                 val res = api.login(LoginRequest(email.trim(), password))
                 val body = res.body()
@@ -196,6 +245,9 @@ class MainViewModel : ViewModel() {
         _myPosts.value = emptyList()
         _myOrders.value = emptyList()
         _chatMessages.value = emptyList()
+        if (AppConfig.USE_SUPABASE_DIRECT) {
+            viewModelScope.launch { SupabaseRepository.logout() }
+        }
         showPopup(
             title = "Đã đăng xuất",
             message = "Bạn đã đăng xuất tài khoản sinh viên. Hãy đăng nhập lại để tiếp tục giao dịch.",
@@ -206,6 +258,31 @@ class MainViewModel : ViewModel() {
 
     fun register(fullName: String, email: String, password: String, studentId: String, universityId: Long, onSuccess: () -> Unit) {
         viewModelScope.launch {
+            if (AppConfig.USE_SUPABASE_DIRECT) {
+                try {
+                    val auth = SupabaseRepository.register(
+                        fullName = fullName,
+                        email = email,
+                        password = password,
+                        studentId = studentId,
+                        phone = null,
+                        universityId = universityId.takeIf { it > 0 },
+                        dormArea = null
+                    )
+                    _currentUser.value = auth.user
+                    showPopup(
+                        title = "Đăng ký thành công",
+                        message = "Tài khoản $email đã được tạo. Bạn có thể đăng tin ngay.",
+                        type = PopupType.SUCCESS,
+                        onConfirm = onSuccess
+                    )
+                    fetchProducts()
+                } catch (e: Exception) {
+                    showPopup("Đăng ký thất bại", e.message ?: "Không thể tạo tài khoản.", PopupType.ERROR)
+                }
+                return@launch
+            }
+
             try {
                 val res = api.register(
                     RegisterRequest(
@@ -247,6 +324,13 @@ class MainViewModel : ViewModel() {
     /** Tải dữ liệu riêng của người dùng sau khi đăng nhập. */
     fun loadUserScopedData() {
         viewModelScope.launch {
+            if (AppConfig.USE_SUPABASE_DIRECT) {
+                runCatching { SupabaseRepository.myPosts() }.onSuccess { _myPosts.value = it }
+                runCatching { SupabaseRepository.myOrders() }.onSuccess { _myOrders.value = it }
+                runCatching { SupabaseRepository.myWishlist() }.onSuccess { _wishlist.value = it }
+                return@launch
+            }
+
             try {
                 api.getMyPosts().takeIf { it.isSuccessful }?.body()?.data?.let { _myPosts.value = it }
                 api.getMySales().takeIf { it.isSuccessful }?.body()?.data?.let { _myOrders.value = it }
@@ -259,6 +343,18 @@ class MainViewModel : ViewModel() {
      */
     fun uploadAvatar(context: Context, uri: Uri, onDone: () -> Unit = {}) {
         viewModelScope.launch {
+            if (AppConfig.USE_SUPABASE_DIRECT) {
+                try {
+                    val url = SupabaseRepository.uploadImage(context, uri, "avatars")
+                    _currentUser.value = SupabaseRepository.updateProfile(avatarUrl = url)
+                    showPopup("Đã cập nhật ảnh đại diện", "Ảnh mới đã được lưu.", PopupType.SUCCESS)
+                    onDone()
+                } catch (e: Exception) {
+                    showPopup("Không đổi được ảnh", e.message ?: "Vui lòng thử lại.", PopupType.ERROR)
+                }
+                return@launch
+            }
+
             try {
                 val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                     ?: throw IllegalStateException("Không đọc được ảnh đã chọn")
@@ -298,6 +394,19 @@ class MainViewModel : ViewModel() {
     /** Cập nhật hồ sơ (họ tên, SĐT, ký túc xá, bio). */
     fun updateProfile(fullName: String?, phone: String?, dormArea: String?, bio: String?, onDone: () -> Unit = {}) {
         viewModelScope.launch {
+            if (AppConfig.USE_SUPABASE_DIRECT) {
+                try {
+                    _currentUser.value = SupabaseRepository.updateProfile(
+                        fullName = fullName, phone = phone, dormArea = dormArea, bio = bio
+                    )
+                    showPopup("Đã lưu hồ sơ", "Thông tin cá nhân đã được cập nhật.", PopupType.SUCCESS)
+                    onDone()
+                } catch (e: Exception) {
+                    showPopup("Không lưu được hồ sơ", e.message ?: "Vui lòng thử lại.", PopupType.ERROR)
+                }
+                return@launch
+            }
+
             try {
                 val res = api.updateProfile(
                     UpdateProfileRequest(
@@ -326,6 +435,27 @@ class MainViewModel : ViewModel() {
 
     fun toggleWishlist(product: ProductDto) {
         viewModelScope.launch {
+            if (AppConfig.USE_SUPABASE_DIRECT) {
+                val nowFavorited = try {
+                    SupabaseRepository.toggleWishlist(product.id)
+                } catch (e: Exception) {
+                    showPopup("Không lưu được tin", e.message ?: "Vui lòng đăng nhập lại.", PopupType.ERROR)
+                    return@launch
+                }
+                _wishlist.value = if (nowFavorited) {
+                    listOf(product.copy(isFavorited = true)) + _wishlist.value.filterNot { it.id == product.id }
+                } else {
+                    _wishlist.value.filterNot { it.id == product.id }
+                }
+                _products.value = _products.value.map {
+                    if (it.id == product.id) it.copy(isFavorited = nowFavorited) else it
+                }
+                _selectedProduct.value = _selectedProduct.value?.let {
+                    if (it.id == product.id) it.copy(isFavorited = nowFavorited) else it
+                }
+                return@launch
+            }
+
             try {
                 api.toggleWishlist(product.id)
             } catch (_: Exception) {}
@@ -364,6 +494,39 @@ class MainViewModel : ViewModel() {
     ) {
         viewModelScope.launch {
             val finalPrice = if (isFree) BigDecimal.ZERO else price
+
+            if (AppConfig.USE_SUPABASE_DIRECT) {
+                try {
+                    val created = SupabaseRepository.createProduct(
+                        title = title,
+                        description = description,
+                        price = finalPrice,
+                        isFree = isFree,
+                        isUrgent = isUrgent,
+                        condition = "LIKE_NEW_95",
+                        conditionNote = conditionLabel,
+                        pickupSpot = pickupSpot,
+                        categoryId = categoryId,
+                        universityId = universityId,
+                        imageUrls = imageUrls
+                    )
+                    _myPosts.value = listOf(created) + _myPosts.value
+                    val pending = created.status == "PENDING"
+                    showPopup(
+                        title = if (pending) "Đã gửi tin chờ duyệt" else "Đăng tin thành công",
+                        message = if (pending)
+                            "Tin \"$title\" đã được gửi tới admin."
+                        else
+                            "Tin \"$title\" đã hiển thị trên chợ.",
+                        type = PopupType.SUCCESS,
+                        onConfirm = onCreated
+                    )
+                } catch (e: Exception) {
+                    showPopup("Đăng tin thất bại", e.message ?: "Vui lòng thử lại.", PopupType.ERROR)
+                }
+                return@launch
+            }
+
             try {
                 val res = api.createProduct(
                     ProductCreateRequest(
@@ -422,6 +585,29 @@ class MainViewModel : ViewModel() {
         onOrdered: () -> Unit
     ) {
         viewModelScope.launch {
+            if (AppConfig.USE_SUPABASE_DIRECT) {
+                try {
+                    val created = SupabaseRepository.placeOrder(
+                        productId = product.id,
+                        offeredPrice = offeredPrice,
+                        meetupLocation = meetupLocation,
+                        meetupTime = meetupTime,
+                        buyerNote = note
+                    )
+                    _myOrders.value = listOf(created) + _myOrders.value
+                    val feeText = created.platformFeeAmount?.let { " Phí sàn tạm tính: ${it.toPlainString()}đ." } ?: ""
+                    showPopup(
+                        title = "Đã gửi yêu cầu đặt mua",
+                        message = "Mã đơn ${created.orderCode ?: "#" + created.id}. Người bán sẽ duyệt yêu cầu của bạn.$feeText",
+                        type = PopupType.SUCCESS,
+                        onConfirm = onOrdered
+                    )
+                } catch (e: Exception) {
+                    showPopup("Không gửi được yêu cầu", e.message ?: "Vui lòng thử lại.", PopupType.ERROR)
+                }
+                return@launch
+            }
+
             try {
                 val res = api.createOrder(
                     OrderCreateRequest(
@@ -461,6 +647,18 @@ class MainViewModel : ViewModel() {
 
     fun approveOrder(order: OrderDto) {
         viewModelScope.launch {
+            if (AppConfig.USE_SUPABASE_DIRECT) {
+                try {
+                    val updated = SupabaseRepository.updateOrderStatus(order.id, "ACCEPTED")
+                    _myOrders.value = _myOrders.value.map { if (it.id == order.id) updated else it }
+                    _products.value = _products.value.filterNot { it.id == order.product.id }
+                    showPopup("Đã duyệt yêu cầu", "Tin đăng chuyển sang trạng thái đang giao dịch.", PopupType.SUCCESS)
+                } catch (e: Exception) {
+                    showPopup("Không duyệt được đơn", e.message ?: "Vui lòng thử lại.", PopupType.ERROR)
+                }
+                return@launch
+            }
+
             try {
                 val res = api.acceptOrder(order.id)
                 val updated = res.body()?.data
@@ -484,6 +682,23 @@ class MainViewModel : ViewModel() {
     /** Hoàn tất giao dịch — backend sẽ chốt phí sàn và trả số tiền người bán nhận. */
     fun completeOrder(order: OrderDto) {
         viewModelScope.launch {
+            if (AppConfig.USE_SUPABASE_DIRECT) {
+                try {
+                    val updated = SupabaseRepository.updateOrderStatus(order.id, "COMPLETED")
+                    _myOrders.value = _myOrders.value.map { if (it.id == order.id) updated else it }
+                    val feeText = updated.platformFeeAmount?.toPlainString() ?: "0"
+                    val receiveText = updated.finalSellerAmount?.toPlainString() ?: "0"
+                    showPopup(
+                        title = "Giao dịch hoàn tất",
+                        message = "Phí sàn: ${feeText}đ • Người bán nhận: ${receiveText}đ.",
+                        type = PopupType.SUCCESS
+                    )
+                } catch (e: Exception) {
+                    showPopup("Không hoàn tất được đơn", e.message ?: "Vui lòng thử lại.", PopupType.ERROR)
+                }
+                return@launch
+            }
+
             try {
                 val res = api.completeOrder(order.id)
                 val updated = res.body()?.data
@@ -506,6 +721,14 @@ class MainViewModel : ViewModel() {
     }
 
     fun markProductInTransaction(productId: Long) {
+        if (AppConfig.USE_SUPABASE_DIRECT) {
+            showPopup(
+                "Trạng thái do đơn hàng quyết định",
+                "Trong chế độ Supabase trực tiếp, tin tự chuyển sang \"Đang giao dịch\" khi bạn duyệt đơn của người mua.",
+                PopupType.INFO
+            )
+            return
+        }
         viewModelScope.launch {
             try {
                 api.updateProductStatus(productId, "IN_TRANSACTION")
@@ -526,6 +749,14 @@ class MainViewModel : ViewModel() {
     }
 
     fun markProductAsSold(productId: Long) {
+        if (AppConfig.USE_SUPABASE_DIRECT) {
+            showPopup(
+                "Trạng thái do đơn hàng quyết định",
+                "Tin tự chuyển sang \"Đã bán\" khi đơn ở trạng thái đang giao dịch được hoàn tất.",
+                PopupType.INFO
+            )
+            return
+        }
         viewModelScope.launch {
             try {
                 api.updateProductStatus(productId, "SOLD")
@@ -551,6 +782,18 @@ class MainViewModel : ViewModel() {
 
     fun deleteMyPost(product: ProductDto) {
         viewModelScope.launch {
+            if (AppConfig.USE_SUPABASE_DIRECT) {
+                try {
+                    SupabaseRepository.deleteProduct(product.id)
+                    _myPosts.value = _myPosts.value.filterNot { it.id == product.id }
+                    _products.value = _products.value.filterNot { it.id == product.id }
+                    showPopup("Đã xóa tin", "Tin \"${product.title}\" đã được gỡ.", PopupType.INFO)
+                } catch (e: Exception) {
+                    showPopup("Không xóa được tin", e.message ?: "Vui lòng thử lại.", PopupType.ERROR)
+                }
+                return@launch
+            }
+
             try {
                 api.deleteProduct(product.id)
             } catch (_: Exception) {}
@@ -572,6 +815,18 @@ class MainViewModel : ViewModel() {
         val receiverId = prod?.seller?.id ?: return
 
         viewModelScope.launch {
+            if (AppConfig.USE_SUPABASE_DIRECT) {
+                try {
+                    val saved = SupabaseRepository.sendMessage(
+                        receiverId = receiverId,
+                        productId = prod?.id,
+                        content = content.trim()
+                    )
+                    _chatMessages.value = _chatMessages.value + saved
+                } catch (_: Exception) { }
+                return@launch
+            }
+
             try {
                 val res = api.sendChatMessage(
                     ChatMessageRequest(

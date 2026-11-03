@@ -540,3 +540,111 @@ gradlew.bat :app:compileDebugKotlin   # KOTLIN_OK
 
 > Ghi chú: `formatVnd` cũ nay chỉ là wrapper gọi `formatPrice` (giữ để không phải sửa hàng loạt call-site). Component mới dùng trực tiếp `formatPrice`.
 
+---
+
+## 16. Chạy app KHÔNG cần backend (gọi thẳng Supabase)
+
+App có thể bỏ qua Spring Boot và nói chuyện trực tiếp với Supabase (PostgREST + RPC).
+
+### 16.1. Bật/tắt chế độ
+
+`mobile-app/app/src/main/java/com/chodocu/app/core/AppConfig.kt`
+
+```kotlin
+object AppConfig {
+    const val USE_SUPABASE_DIRECT = true          // true: gọi thẳng Supabase
+    const val SUPABASE_URL = "https://<project>.supabase.co"
+    const val SUPABASE_ANON_KEY = "sb_publishable_..."   // anon/publishable key
+    const val STORAGE_BUCKET = "passuni"
+    const val BACKEND_BASE_URL = "http://10.0.2.2:8080/api/"  // chỉ dùng khi tắt direct
+}
+```
+
+### 16.2. Cài đặt phía Supabase (bắt buộc)
+
+Chạy trong **SQL Editor**:
+
+```
+database_schema.sql      -- bảng + dữ liệu cấu hình
+seed_data.sql            -- dữ liệu mẫu (tuỳ chọn)
+supabase_direct_setup.sql  ← QUAN TRỌNG: view + RPC + session + quyền + storage
+```
+
+`supabase_direct_setup.sql` tạo:
+
+| Thành phần | Vai trò |
+|---|---|
+| `app_sessions` | Phiên đăng nhập do server cấp (token UUID), thay cho JWT backend |
+| `v_public_products` | Chỉ bài `APPROVED`, đã làm phẳng (tên trường, người bán, mảng ảnh) |
+| `v_products`, `v_orders`, `v_chat_messages`, `v_user_profiles` | View nội bộ, **không** cấp quyền cho anon |
+| `api_login`, `api_register`, `api_logout`, `api_me`, `api_update_profile` | Xác thực + hồ sơ |
+| `api_create_product`, `api_delete_product`, `api_my_posts` | Đăng/sửa/xóa tin (server tự set `PENDING`) |
+| `api_place_order`, `api_update_order`, `api_my_orders` | Đơn hàng + chốt phí sàn |
+| `api_toggle_wishlist`, `api_my_wishlist` | Yêu thích |
+| `api_messages`, `api_send_message` | Chat |
+| `api_fee_preview` | Xem trước phí sàn |
+| Storage policies cho bucket `passuni` | Upload ảnh/avatar bằng anon key |
+
+Quyền được siết bằng: `revoke all on all tables ... from anon`, bật RLS toàn bộ bảng,
+chỉ `grant select` cho `categories`, `universities`, `v_public_products`, và
+`grant execute` cho đúng danh sách RPC. Mọi ghi đều đi qua RPC `SECURITY DEFINER`
+có kiểm tra session token → anon **không thể** ghi trực tiếp bảng.
+
+### 16.3. Luồng dữ liệu trong app
+
+```
+App ──(anon key)──► PostgREST
+                     ├─ GET  /rest/v1/v_public_products      (feed)
+                     ├─ GET  /rest/v1/categories, universities
+                     └─ POST /rest/v1/rpc/api_*              (có p_token)
+                              ├─ api_login → token + user_id
+                              ├─ api_me → hồ sơ
+                              ├─ api_place_order → đơn + phí đã chốt
+                              └─ api_update_order → duyệt/hoàn tất/hủy
+App ──(anon key)──► Storage /object/passuni/...   (upload avatar, ảnh tin)
+```
+
+Session token lưu trong `SupabaseSession` (RAM). Đăng xuất gọi `api_logout` để xóa phiên.
+
+### 16.4. Luồng đăng nhập
+
+```mermaid
+sequenceDiagram
+    participant App
+    participant SB as Supabase (PostgREST)
+    participant DB as PostgreSQL
+
+    App->>SB: rpc/api_login(email, password)
+    SB->>DB: users WHERE email + crypt(password, hash)
+    DB-->>SB: hợp lệ
+    SB->>DB: INSERT app_sessions(user_id) → token
+    SB-->>App: { out_token, out_user_id }
+    App->>SB: rpc/api_me(p_token)
+    SB-->>App: hồ sơ người dùng
+```
+
+### 16.5. File phía app
+
+| File | Nội dung |
+|---|---|
+| `core/AppConfig.kt` | Cờ `USE_SUPABASE_DIRECT`, URL, anon key |
+| `data/supabase/SupabaseClient.kt` | Retrofit + OkHttp, tự gắn `apikey`/`Authorization` |
+| `data/supabase/SupabaseService.kt` | Khai báo endpoint PostgREST + RPC |
+| `data/supabase/SupabaseModels.kt` | Row snake_case → DTO của UI |
+| `data/supabase/SupabaseRepository.kt` | Nghiệp vụ: feed, auth, đơn, chat, upload ảnh |
+| `viewmodel/MainViewModel.kt` | Rẽ nhánh `if (AppConfig.USE_SUPABASE_DIRECT)` cho từng thao tác |
+
+### 16.6. Khác biệt cần biết
+
+| Hành vi | Backend (Spring) | Supabase trực tiếp |
+|---|---|---|
+| Token | JWT ký server | Session UUID trong `app_sessions` |
+| Duyệt bài | Admin web | Admin web gọi backend **hoặc** sửa trực tiếp Supabase |
+| Upload ảnh | API `/api/upload` | Storage REST (anon key + policy) |
+| "Đánh dấu đang giao dịch / đã bán" | Đổi trạng thái trực tiếp | Do luồng đơn hàng quyết định (app chỉ hiện gợi ý) |
+| Chat realtime | WebSocket | Chưa có realtime — gửi/nhận qua RPC khi mở chat |
+
+> Lưu ý: anon key nằm trong app nên **không phải bí mật**. Toàn bộ bảo vệ dựa trên
+> view + RPC + revoke quyền bảng. Không dùng `service_role` key trong app.
+
+
