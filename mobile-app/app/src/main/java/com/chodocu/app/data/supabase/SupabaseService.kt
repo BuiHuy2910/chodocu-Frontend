@@ -61,54 +61,57 @@ interface SupabaseService {
     ): List<SProduct>
 
     // ---------- Auth ----------
+    // Lưu ý: phải có @JvmSuppressWildcards. Nếu không, Kotlin sinh ra
+    // Map<String, ? extends Object> và Retrofit sẽ báo:
+    // "Parameter type must not include a type variable or wildcard".
     @POST("rest/v1/rpc/api_login")
-    suspend fun login(@Body body: Map<String, Any?>): Response<List<SLogin>>
+    suspend fun login(@Body body: @JvmSuppressWildcards Map<String, Any?>): Response<List<SLogin>>
 
     @POST("rest/v1/rpc/api_register")
-    suspend fun register(@Body body: Map<String, Any?>): Response<List<SLogin>>
+    suspend fun register(@Body body: @JvmSuppressWildcards Map<String, Any?>): Response<List<SLogin>>
 
     @POST("rest/v1/rpc/api_logout")
-    suspend fun logout(@Body body: Map<String, Any?>): Response<Boolean>
+    suspend fun logout(@Body body: @JvmSuppressWildcards Map<String, Any?>): Response<Boolean>
 
     @POST("rest/v1/rpc/api_me")
-    suspend fun me(@Body body: Map<String, Any?>): Response<List<SUser>>
+    suspend fun me(@Body body: @JvmSuppressWildcards Map<String, Any?>): Response<List<SUser>>
 
     @POST("rest/v1/rpc/api_update_profile")
-    suspend fun updateProfile(@Body body: Map<String, Any?>): Response<List<SUser>>
+    suspend fun updateProfile(@Body body: @JvmSuppressWildcards Map<String, Any?>): Response<List<SUser>>
 
     // ---------- Sản phẩm của tôi ----------
     @POST("rest/v1/rpc/api_my_posts")
-    suspend fun myPosts(@Body body: Map<String, Any?>): Response<List<SProduct>>
+    suspend fun myPosts(@Body body: @JvmSuppressWildcards Map<String, Any?>): Response<List<SProduct>>
 
     @POST("rest/v1/rpc/api_create_product")
-    suspend fun createProduct(@Body body: Map<String, Any?>): Response<List<SProduct>>
+    suspend fun createProduct(@Body body: @JvmSuppressWildcards Map<String, Any?>): Response<List<SProduct>>
 
     @POST("rest/v1/rpc/api_delete_product")
-    suspend fun deleteProduct(@Body body: Map<String, Any?>): Response<Boolean>
+    suspend fun deleteProduct(@Body body: @JvmSuppressWildcards Map<String, Any?>): Response<Boolean>
 
     // ---------- Đơn hàng ----------
     @POST("rest/v1/rpc/api_my_orders")
-    suspend fun myOrders(@Body body: Map<String, Any?>): Response<List<SOrder>>
+    suspend fun myOrders(@Body body: @JvmSuppressWildcards Map<String, Any?>): Response<List<SOrder>>
 
     @POST("rest/v1/rpc/api_my_wishlist")
-    suspend fun myWishlist(@Body body: Map<String, Any?>): Response<List<SProduct>>
+    suspend fun myWishlist(@Body body: @JvmSuppressWildcards Map<String, Any?>): Response<List<SProduct>>
 
     @POST("rest/v1/rpc/api_toggle_wishlist")
-    suspend fun toggleWishlist(@Body body: Map<String, Any?>): Response<Boolean>
+    suspend fun toggleWishlist(@Body body: @JvmSuppressWildcards Map<String, Any?>): Response<Boolean>
 
     @POST("rest/v1/rpc/api_place_order")
-    suspend fun placeOrder(@Body body: Map<String, Any?>): Response<List<SOrder>>
+    suspend fun placeOrder(@Body body: @JvmSuppressWildcards Map<String, Any?>): Response<List<SOrder>>
 
     @POST("rest/v1/rpc/api_update_order")
-    suspend fun updateOrder(@Body body: Map<String, Any?>): Response<List<SOrder>>
+    suspend fun updateOrder(@Body body: @JvmSuppressWildcards Map<String, Any?>): Response<List<SOrder>>
 
     @POST("rest/v1/rpc/api_fee_preview")
-    suspend fun feePreview(@Body body: Map<String, Any?>): Response<List<SFee>>
+    suspend fun feePreview(@Body body: @JvmSuppressWildcards Map<String, Any?>): Response<List<SFee>>
 
     // ---------- Chat ----------
     @POST("rest/v1/rpc/api_messages")
-    suspend fun messages(@Body body: Map<String, Any?>): Response<List<SChat>>
+    suspend fun messages(@Body body: @JvmSuppressWildcards Map<String, Any?>): Response<List<SChat>>
 
     @POST("rest/v1/rpc/api_send_message")
-    suspend fun sendMessage(@Body body: Map<String, Any?>): Response<List<SChat>>
+    suspend fun sendMessage(@Body body: @JvmSuppressWildcards Map<String, Any?>): Response<List<SChat>>
 }

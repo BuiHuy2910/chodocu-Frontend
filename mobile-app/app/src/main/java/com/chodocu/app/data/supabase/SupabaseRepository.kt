@@ -10,7 +10,9 @@ import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import retrofit2.HttpException
 import retrofit2.Response
+import java.io.IOException
 import java.math.BigDecimal
 import java.util.UUID
 
@@ -52,12 +54,29 @@ object SupabaseRepository {
         throw SupabaseException(readErrorMessage(this))
     }
 
+    /**
+     * Các endpoint trả thẳng `List<...>` (không bọc `Response`) sẽ ném HttpException/IOException.
+     * Bọc lại để UI luôn nhận thông báo tiếng Việt thay vì "HTTP 401 Unauthorized".
+     */
+    private suspend fun <T> direct(block: suspend () -> T): T = try {
+        block()
+    } catch (e: HttpException) {
+        val raw = runCatching { e.response()?.errorBody()?.string() }.getOrNull()
+        throw SupabaseException(httpMessage(e.code(), raw))
+    } catch (e: IOException) {
+        throw SupabaseException("Không kết nối được Supabase. Kiểm tra mạng rồi thử lại.")
+    }
+
     private fun readErrorMessage(response: Response<*>): String {
         val raw = try {
             response.errorBody()?.string()
         } catch (_: Exception) {
             null
         }
+        return httpMessage(response.code(), raw)
+    }
+
+    private fun httpMessage(code: Int, raw: String?): String {
         val codeOrMessage = try {
             raw?.let {
                 val obj = JsonParser.parseString(it).asJsonObject
@@ -68,7 +87,8 @@ object SupabaseRepository {
         }
 
         return when {
-            codeOrMessage == null -> "Máy chủ trả về lỗi ${response.code()}"
+            code == 404 -> "Không tìm thấy API trên Supabase (404). Kiểm tra AppConfig.SUPABASE_URL."
+            codeOrMessage == null -> "Máy chủ trả về lỗi $code"
             codeOrMessage.contains("PGRST202") || codeOrMessage.contains("Could not find the function") ->
                 "Supabase chưa cài đặt hàm API. Hãy chạy file supabase_direct_setup.sql trong SQL Editor."
             codeOrMessage.contains("permission denied") || codeOrMessage.contains("42501") ->
@@ -97,7 +117,7 @@ object SupabaseRepository {
     // =========================================================================
 
     suspend fun categories(): List<CategoryDto> = withContext(Dispatchers.IO) {
-        api.categories().map {
+        direct { api.categories() }.map {
             CategoryDto(
                 id = it.id,
                 name = it.name.orEmpty(),
@@ -108,7 +128,7 @@ object SupabaseRepository {
     }
 
     suspend fun universities(): List<UniversityDto> = withContext(Dispatchers.IO) {
-        api.universities().map {
+        direct { api.universities() }.map {
             UniversityDto(
                 id = it.id,
                 name = it.name.orEmpty(),
@@ -134,19 +154,21 @@ object SupabaseRepository {
             else -> null
         }
 
-        val rows = api.products(
-            title = keyword?.takeIf { it.isNotBlank() }?.let { "ilike.*$it*" },
-            categoryId = categoryId?.let { "eq.$it" },
-            universityId = universityId?.let { "eq.$it" },
-            andFilter = priceFilter
-        )
+        val rows = direct {
+            api.products(
+                title = keyword?.takeIf { it.isNotBlank() }?.let { "ilike.*$it*" },
+                categoryId = categoryId?.let { "eq.$it" },
+                universityId = universityId?.let { "eq.$it" },
+                andFilter = priceFilter
+            )
+        }
 
         val favoriteIds = myFavoriteIds()
         rows.map { it.toDto(isFavorited = favoriteIds.contains(it.id)) }
     }
 
     suspend fun productDetail(id: Long): ProductDto = withContext(Dispatchers.IO) {
-        val row = api.productById("eq.$id").firstOrNull()
+        val row = direct { api.productById("eq.$id") }.firstOrNull()
             ?: throw SupabaseException("Không tìm thấy tin đăng này.")
         row.toDto(isFavorited = myFavoriteIds().contains(row.id))
     }
@@ -174,7 +196,14 @@ object SupabaseRepository {
         SupabaseSession.token = token
         SupabaseSession.userId = result.outUserId
 
-        val user = me()
+        val user = try {
+            me()
+        } catch (e: Exception) {
+            // Không đọc được hồ sơ thì phải huỷ phiên vừa tạo, tránh kẹt trạng thái nửa vời
+            runCatching { api.logout(mapOf("p_token" to token)) }
+            SupabaseSession.clear()
+            throw SupabaseException("Đăng nhập được nhưng không đọc được hồ sơ: ${e.message}")
+        }
         AuthResponse(accessToken = token, tokenType = "Session", user = user)
     }
 
@@ -203,7 +232,13 @@ object SupabaseRepository {
         SupabaseSession.token = token
         SupabaseSession.userId = result.outUserId
 
-        val user = me()
+        val user = try {
+            me()
+        } catch (e: Exception) {
+            runCatching { api.logout(mapOf("p_token" to token)) }
+            SupabaseSession.clear()
+            throw SupabaseException("Tạo được tài khoản nhưng không đọc được hồ sơ: ${e.message}")
+        }
         AuthResponse(accessToken = token, tokenType = "Session", user = user)
     }
 

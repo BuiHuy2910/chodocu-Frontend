@@ -715,5 +715,49 @@ curl -s -X POST "https://ovxnlepmewindufcgxln.supabase.co/rest/v1/rpc/api_login"
 (6 APPROVED hiển thị công khai + 4 PENDING chờ duyệt), `product_images` đầy đủ,
 `order_requests` có 1 đơn COMPLETED (có phí sàn) + 1 đơn PENDING.
 
+### 17.7. Lỗi `Parameter type must not include a type variable or wildcard`
+
+Triệu chứng: bấm đăng nhập là báo "Đăng nhập thất bại — Parameter type must not include a type variable or wildcard…",
+**không có request nào bay lên Supabase** (log OkHttp trống).
+
+Nguyên nhân: `SupabaseService` khai báo
+
+```kotlin
+suspend fun login(@Body body: Map<String, Any?>): Response<List<SLogin>>
+```
+
+Kotlin compile `Any?` thành **wildcard** ⇒ bytecode là `Map<String, ? extends Object>`.
+Retrofit từ chối wildcard khi dựng service nên **toàn bộ** interface `SupabaseService`
+không tạo được (`IllegalArgumentException` ngay ở `SupabaseClient.service`), tức là
+mọi tính năng direct-mode đều chết chứ không riêng đăng nhập.
+
+Kiểm chứng bằng bytecode:
+
+```powershell
+javap -p -s app\build\tmp\kotlin-classes\debug\com\chodocu\app\data\supabase\SupabaseService.class
+# trước: Map<java.lang.String, ? extends java.lang.Object>   -> lỗi
+# sau  : Map<java.lang.String, java.lang.Object>             -> OK
+```
+
+Cách sửa (đã áp dụng cho cả 16 hàm RPC):
+
+```kotlin
+suspend fun login(@Body body: @JvmSuppressWildcards Map<String, Any?>): Response<List<SLogin>>
+```
+
+> Quy tắc: mọi `@Body`/`@Query`/`@Part` của Retrofit mà chứa generic có `Any?`, `out T`,
+> `List<Any?>`… đều phải thêm `@JvmSuppressWildcards`.
+
+### 17.8. Cải thiện xử lý lỗi ở app
+
+- `SupabaseRepository.direct { }`: bọc các endpoint trả thẳng `List<...>` (categories,
+  universities, feed, product detail) để đổi `HttpException`/`IOException` thành câu
+  tiếng Việt thay vì "HTTP 401 Unauthorized".
+- `login()` / `register()`: nếu gọi `api_me` thất bại sau khi đã có token thì **huỷ phiên
+  vừa tạo** (`api_logout` + `SupabaseSession.clear()`) và báo rõ nguyên nhân, tránh
+  tình trạng "đăng nhập nửa vời".
+- Map thêm mã lỗi `404` → "Không tìm thấy API trên Supabase (kiểm tra AppConfig.SUPABASE_URL)".
+
+
 
 
