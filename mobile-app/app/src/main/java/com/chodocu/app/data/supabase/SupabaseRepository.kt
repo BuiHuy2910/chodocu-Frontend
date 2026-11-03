@@ -69,12 +69,17 @@ object SupabaseRepository {
 
         return when {
             codeOrMessage == null -> "Máy chủ trả về lỗi ${response.code()}"
+            codeOrMessage.contains("PGRST202") || codeOrMessage.contains("Could not find the function") ->
+                "Supabase chưa cài đặt hàm API. Hãy chạy file supabase_direct_setup.sql trong SQL Editor."
+            codeOrMessage.contains("permission denied") || codeOrMessage.contains("42501") ->
+                "Supabase từ chối truy cập bảng này (kiểm tra GRANT và RLS policy)."
             codeOrMessage.contains("EMAIL_EXISTS") -> "Email này đã được đăng ký."
             codeOrMessage.contains("EMAIL_NOT_FOUND") -> "Email chưa tồn tại trên hệ thống."
             codeOrMessage.contains("WRONG_PASSWORD") -> "Mật khẩu không đúng."
             codeOrMessage.contains("ACCOUNT_LOCKED") -> "Tài khoản đã bị khóa."
             codeOrMessage.contains("INVALID_SESSION") -> "Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại."
             codeOrMessage.contains("PASSWORD_TOO_SHORT") -> "Mật khẩu phải có ít nhất 6 ký tự."
+            codeOrMessage.contains("EMAIL_REQUIRED") -> "Vui lòng nhập email."
             codeOrMessage.contains("CANNOT_BUY_OWN") -> "Bạn không thể tự mua sản phẩm của mình."
             codeOrMessage.contains("PRODUCT_SOLD") -> "Sản phẩm đã được bán."
             codeOrMessage.contains("PRODUCT_NOT_AVAILABLE") -> "Sản phẩm chưa được duyệt hoặc đang giao dịch."

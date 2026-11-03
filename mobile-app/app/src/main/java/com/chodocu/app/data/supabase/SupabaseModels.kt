@@ -227,10 +227,11 @@ fun SProduct.toDto(isFavorited: Boolean = false): ProductDto = ProductDto(
 )
 
 private fun conditionLabelOf(condition: String?): String = when (condition) {
+    "NEW_100" -> "Mới 100%"
     "LIKE_NEW_99" -> "Như mới (99%)"
     "LIKE_NEW_95" -> "Như mới (95%)"
-    "GOOD_80" -> "Tốt (80%)"
-    "FAIR_70" -> "Khá (70%)"
+    "GOOD_85", "GOOD_80" -> "Tốt (80-90%)"
+    "USABLE", "FAIR_70" -> "Còn dùng tốt"
     else -> "Đang dùng"
 }
 
