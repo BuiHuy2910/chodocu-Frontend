@@ -822,6 +822,104 @@ restart identity cascade;
 -- sau đó chạy lại: database_schema.sql → seed_data.sql → supabase_direct_setup.sql
 ```
 
+---
+
+## 19. Tái cấu trúc & nâng cấp giao diện Admin Web (v3.0)
+
+### 19.1. Vấn đề của bản v2
+
+| # | Vấn đề | Hệ quả |
+|---|---|---|
+| 1 | Toàn bộ CSS component dùng `@apply` trong `<style>` thường | **Tailwind Play CDN bỏ qua `@apply`** → `.card`, `.badge`, `.btn`, `.input`… mất sạch style |
+| 2 | Một file `admin.js` 891 dòng + `index.html` 688 dòng | Khó sửa, sửa 1 chỗ dễ vỡ chỗ khác |
+| 3 | Emoji làm trạng thái (`⏳ Chờ duyệt`, `✅ Đã duyệt`) | Lệch với design system mobile (mục 15: "không emoji trong UI") |
+| 4 | `confirm()` / `prompt()` mặc định của trình duyệt | Không đồng bộ giao diện, không style được |
+| 5 | Bảng rộng đẩy cả trang ra ngoài (grid item `min-width:auto`) | Nội dung bị cắt, không cuộn được |
+| 6 | Sidebar cố định, không có menu mobile | Không dùng được trên màn hình nhỏ |
+
+### 19.2. Cấu trúc thư mục mới
+
+```
+chodocu-admin/
+├── index.html                 # Shell: login + layout + 8 section + 6 modal
+├── README.md                  # Hướng dẫn chạy & quy ước code
+├── css/
+│   └── admin.css              # Design system thuần CSS (tokens + components)
+└── js/
+    ├── config.js              # API_BASE, SUPABASE_URL, khoá localStorage
+    ├── app.js                 # Bootstrap: bind event, khôi phục phiên, ESC/Enter
+    ├── core/
+    │   ├── http.js            # fetch wrapper: Bearer token + chuẩn hoá lỗi
+    │   ├── ui.js              # format, badge, toast, modal, confirm, skeleton
+    │   ├── auth.js            # login / logout / restore
+    │   └── router.js          # chuyển section + gọi loader
+    └── modules/
+        ├── dashboard.js  ├── pending.js   ├── products.js  ├── orders.js
+        ├── financial.js  ├── users.js     ├── reports.js   └── settings.js
+```
+
+- Nạp bằng `<script>` cổ điển (không ES module) → **mở trực tiếp `file://` vẫn chạy**.
+- Tất cả nằm trong namespace `window.PU`: `PU.config`, `PU.http`, `PU.ui`,
+  `PU.auth`, `PU.router`, `PU.modules.<tên>`.
+
+### 19.3. Design system (`css/admin.css`)
+
+Đồng bộ với app mobile (mục 15):
+
+| Token | Giá trị |
+|---|---|
+| Nền | `#F6F7F8` |
+| Card | trắng + viền `1px #E4E7EC`, radius 12/16 |
+| Thương hiệu | emerald `#0B6B4A` |
+| Cảnh báo / lỗi / thông tin | `#B4530A` / `#B42318` / `#0D5C8C` |
+| Chữ | `#1A1D21` / `#4A5059` / `#737B86` / `#98A0AA` |
+| Radius | 6 / 8 / 12 / 16 / full |
+| Bóng | rất nhẹ (`0 1px 2px` → `0 12px 32px` cho modal) |
+
+Component: `.pu-card`, `.pu-btn--{primary,ghost,success,danger,warn}`, `.pu-input`,
+`.pu-select`, `.pu-badge--{ok,warn,danger,info,violet,neutral}`, `.pu-kpi`,
+`.pu-table`, `.pu-modal`, `.pu-toast`, `.pu-skeleton`, `.pu-state`, `.pu-review`,
+`.pu-setting`, `.pu-info`, `.pu-tabs`.
+
+**Quy tắc quan trọng:** không dùng `@apply` của Tailwind nữa — nếu cần style mới,
+viết CSS thuần vào `css/admin.css`.
+
+### 19.4. Thay đổi theo màn hình
+
+| Màn hình | Nâng cấp |
+|---|---|
+| **Đăng nhập** | Layout 2 cột (brand panel + form), hiển thị lỗi trong `.pu-info--danger`, Enter để đăng nhập, nút loading khi chờ |
+| **Layout** | Sidebar nhóm mục (Tổng quan / Nội dung / Tài chính / Quản lý), badge số lượng chờ duyệt & báo cáo, drawer + nút menu ở màn hình < 860px |
+| **Tổng quan** | 8 KPI chia 2 dải, biểu đồ donut + bar (Chart.js, tự `destroy()` khi vẽ lại), thao tác nhanh |
+| **Duyệt bài** | Card gọn (ảnh 3:2 max 150px), meta 2 cột, nút Xem/Duyệt/Từ chối; trạng thái rỗng "Tất cả đã xử lý" |
+| **Sản phẩm** | Bảng sticky header, skeleton loading, badge có chấm màu, modal chi tiết có gallery + grid thông tin, **modal "Nhật ký duyệt"** gọi `/admin/moderation-logs` |
+| **Đơn hàng** | Nút thao tác theo trạng thái; thay `prompt()` bằng modal ghi chú (`PU.ui.askNote`) |
+| **Tài chính** | KPI + cấu hình phí + bậc phí CRUD + mô phỏng phí (gọi `/admin/fee/preview`) + bảng giao dịch |
+| **Người dùng** | Ảnh thật từ API (fallback pravatar JPEG), hàng bị khoá mờ 55%, đổi role chỉ hiện với ADMIN, thay `confirm()` bằng modal |
+| **Báo cáo** | Xử lý / bác bỏ trong modal, badge đếm số PENDING |
+| **Cài đặt** | Mỗi setting 1 dòng có mô tả + "cập nhật bởi", kiểm tra kết nối backend, hiển thị `API_BASE` & Supabase URL |
+
+### 19.5. Sửa lỗi kèm theo
+
+- `.pu-main { min-width: 0 }` + `min-width: 0` cho grid item → bảng rộng **tự cuộn
+  trong card**, không đẩy cả trang ra ngoài.
+- `PU.http` khi gặp `401` → tự gọi `PU.auth.logout(true)` thay vì hiển thị lỗi khó hiểu.
+- Ẩn mục "Cài đặt" chỉ khi role **thực sự** là `MODERATOR`
+  (trước đây role `''` lúc chưa đăng nhập cũng bị ẩn).
+- Escape đóng mọi modal + đóng sidebar mobile; click ngoài sidebar cũng đóng.
+
+### 19.6. Kiểm chứng
+
+```powershell
+cd chodocu-admin
+Get-ChildItem -Recurse -Filter *.js | ForEach-Object { node --check $_.FullName }  # OK 14/14
+```
+
+Đã mở `index.html` bằng trình duyệt và kiểm tra: login → dashboard (biểu đồ) →
+duyệt bài → sản phẩm → đơn hàng → tài chính → người dùng → báo cáo → cài đặt,
+không có lỗi JavaScript; `document.documentElement.scrollWidth == window.innerWidth`.
+
+
 
 
 
