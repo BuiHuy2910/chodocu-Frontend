@@ -217,7 +217,112 @@ gantt
 
 ---
 
-## 5. Phân bổ khối lượng (ước lượng)
+## 5. Phân công chi tiết theo từng người (người × tuần)
+
+### 5.1. Ma trận tóm tắt
+
+| Thành viên | Tuần 1 | Tuần 2 | Tuần 3 | Tuần 4 | Tuần 5 | Tuần 6 | Tuần 7 |
+|---|---|---|---|---|---|---|---|
+| **TV1** Nhóm trưởng / Backend Lead | Khảo sát, kiến trúc, API contract, mở board | Auth + JWT + phân quyền | `ProductService` + quy tắc duyệt | `OrderService` state machine | Rà soát bảo mật + API reports | Review toàn bộ, đóng bug chặn | Báo cáo ch.1–2, tổng duyệt |
+| **TV2** Backend Đơn hàng & Phí | Đặc tả đơn + công thức phí | API sản phẩm / danh mục / trường | Bậc phí + `fee-preview` + CRUD | Chốt phí khi tạo đơn, transactions | API tài chính (GMV, tổng phí) | Test biên phí, fix bug | Báo cáo ch.3 (nghiệp vụ + phí) |
+| **TV3** Mobile Lead | Dựng project Android, Retrofit/Coil | Theme + Login + Feed + Chi tiết | Màn Đăng tin + `ProductCard` | Màn Đơn của tôi + Đặt mua | Redesign UI/UX v2 (tokens M3) | Tối ưu list, fix bug UI | Ảnh + mô tả chức năng mobile |
+| **TV4** Mobile nghiệp vụ | Wireframe 8 màn, chuẩn bị máy test | ViewModel + Retrofit, bỏ data fix cứng | Upload ảnh + validate form | Chat theo sản phẩm | Hồ sơ + đổi avatar | Fix bug đơn/chat trên máy thật | Quay video demo 3–5 phút |
+| **TV5** Admin Web + QA | Wireframe 8 màn + API draft + test case | Layout, login, gọi API thật | Màn Duyệt bài | Màn Quản lý đơn | Tài chính, bậc phí, Users, Reports, Settings | Kiểm thử hồi quy + bảng bug | Slide bảo vệ + kịch bản demo |
+| **TV6** DB / DevOps / Docs | ERD, Supabase, 3 repo, `.gitignore` | `database_schema.sql` + `seed_data.sql` v1 | `moderation_logs`, index, view doanh thu | Seed đơn mẫu + transaction + review | Storage bucket/policy + upload service | Seed mở rộng + script reset | Rà soát docs, hướng dẫn cài đặt, nộp bài |
+
+**Cặp review chéo** (bắt buộc, mỗi PR ≥ 1 người duyệt):
+
+- TV1 ↔ TV3 — API contract backend ↔ mobile
+- TV2 ↔ TV5 — đơn hàng & phí hiển thị trên admin
+- TV4 ↔ TV6 — upload ảnh / storage / avatar
+
+---
+
+### 5.2. TV1 — Nhóm trưởng & Backend Lead
+
+| Tuần | Việc cụ thể | Bàn giao |
+|---|---|---|
+| 1 | Khảo sát nhu cầu; viết use case + sơ đồ kiến trúc; **chốt API contract** (danh sách endpoint + DTO); tạo board công việc | `docs/` mục 1–2, bảng API contract |
+| 2 | Spring Security + JWT, `AuthService` (register/login/me), phân quyền `STUDENT/MODERATOR/ADMIN`; review PR mobile | `/auth/*` chạy được, PR review |
+| 3 | `ProductService`: server tự quyết định `PENDING/APPROVED`, duyệt lại khi sinh viên sửa bài; chặn client tự duyệt | Quy tắc kiểm duyệt ở server |
+| 4 | `OrderService` state machine (`PENDING→ACCEPTED→COMPLETED`), sinh `order_code`, chặn chuyển trạng thái sai | API accept/complete/reject |
+| 5 | Rà soát bảo mật (role, validate input), API báo cáo vi phạm | `/admin/reports` |
+| 6 | Review toàn bộ nhánh, **đóng hết bug mức chặn luồng**, chốt release candidate | Danh sách bug đã đóng |
+| 7 | Viết chương 1–2 + kết luận + hướng phát triển; tổng duyệt báo cáo; điều phối buổi demo | Báo cáo hoàn chỉnh |
+
+---
+
+### 5.3. TV2 — Backend Đơn hàng & Phí sàn
+
+| Tuần | Việc cụ thể | Bàn giao |
+|---|---|---|
+| 1 | Đặc tả nghiệp vụ đơn hàng; viết công thức phí sàn theo bậc; bảng chuyển trạng thái hợp lệ | Tài liệu nghiệp vụ + công thức |
+| 2 | API sản phẩm (list / detail / filter / phân trang), danh mục, trường; `DtoMapper` | `/products`, `/categories`, `/universities` |
+| 3 | Bảng `platform_fee_tiers`; `PlatformSettingService.calculate()` (bậc → min → max → làm tròn); `fee-preview`; CRUD bậc phí | Công thức phí + API preview |
+| 4 | **Chốt phí ngay khi tạo đơn** (rate, amount, final_seller/buyer, payer); ghi `transactions`; cộng `completed_deals` | Đơn lưu vết phí đúng |
+| 5 | API tài chính: tổng phí, GMV, số đơn hoàn thành, giao dịch gần đây | `/admin/financial` |
+| 6 | Test biên phí: `0đ`, `100k`, `1tr`, `>1tr`, tắt thu phí, `BUYER`, `SPLIT`; fix bug | Bảng kết quả test phí |
+| 7 | Viết chương 3: thiết kế nghiệp vụ + phí sàn + bảng so sánh phương án | Chương 3 |
+
+---
+
+### 5.4. TV3 — Mobile Lead (Kotlin/Compose)
+
+| Tuần | Việc cụ thể | Bàn giao |
+|---|---|---|
+| 1 | Dựng project Android (Compose, Navigation, Retrofit, Gson, Coil); chạy "Hello" trên máy ảo; review wireframe | App build & chạy được |
+| 2 | Theme + design tokens; màn **Đăng nhập / Đăng ký**, **Trang chủ (feed)**, **Chi tiết tin** | 4 màn UI |
+| 3 | Màn **Đăng tin** (chọn ảnh, danh mục, trường), component `ProductCard` dùng chung | Đăng tin thành công |
+| 4 | Màn **Đơn của tôi** (mua/bán); luồng **Đặt mua** hiển thị phí tạm tính; điều hướng | 2 màn nghiệp vụ |
+| 5 | Redesign UI/UX v2: bỏ gradient/emoji, thang chữ M3, màu ngữ nghĩa, bo góc nhỏ | Theme + components v2 |
+| 6 | Tối ưu danh sách (phân trang, tránh load lại), xử lý ảnh lỗi/placeholder, fix bug UI | App mượt, không crash |
+| 7 | Chụp ảnh màn hình, viết mô tả chức năng mobile | Chương 4 (mobile) |
+
+---
+
+### 5.5. TV4 — Mobile Dev (nghiệp vụ)
+
+| Tuần | Việc cụ thể | Bàn giao |
+|---|---|---|
+| 1 | Wireframe 8 màn mobile; chuẩn bị máy thật + máy ảo để test | Wireframe + thiết bị test |
+| 2 | `MainViewModel` + `RetrofitClient`; nối API thật; **xoá toàn bộ dữ liệu fix cứng**; xử lý lỗi mạng | App lấy dữ liệu 100% từ API |
+| 3 | Upload ảnh khi đăng tin, preview ảnh, validate form (tên, danh mục, giá) | Ảnh lưu & hiển thị |
+| 4 | **Chat** theo sản phẩm: gửi/nhận tin, hiển thị đối tác + thông tin sản phẩm | Màn Chat hoạt động |
+| 5 | **Hồ sơ** + đổi avatar (chọn ảnh → upload → cập nhật hồ sơ) | Avatar hoạt động |
+| 6 | Fix bug luồng đơn/chat phát hiện khi test trên máy thật | Bug log đã đóng |
+| 7 | Quay **video demo** 3–5 phút (đăng nhập → đăng tin → duyệt → đặt mua → hoàn tất) | Video demo |
+
+---
+
+### 5.6. TV5 — Admin Web + QA
+
+| Tuần | Việc cụ thể | Bàn giao |
+|---|---|---|
+| 1 | Wireframe 8 màn admin; danh sách API cần; khung **test case** (mã TC, bước, kỳ vọng) | Wireframe + test case khung |
+| 2 | Layout admin (sidebar + topbar), màn **Đăng nhập**, gọi `/auth/login` thật | Admin chạy được |
+| 3 | Màn **Duyệt bài** + modal từ chối kèm lý do | Duyệt / từ chối được |
+| 4 | Màn **Quản lý đơn**: bảng 10 cột (mã đơn, phí, tiền người bán nhận…), nút duyệt/hoàn tất/huỷ có ghi chú | Admin can thiệp đơn |
+| 5 | Màn **Tài chính + bậc phí CRUD**, **Người dùng**, **Báo cáo**, **Cài đặt** | Đủ 8 màn hình |
+| 6 | Kiểm thử hồi quy 8 màn; ghi bug có mức độ; xác nhận test case pass ≥ 95% | Test case + bug list |
+| 7 | Slide bảo vệ + kịch bản bấm demo (theo thứ tự), tập dượt | Slide + script demo |
+
+---
+
+### 5.7. TV6 — Database / DevOps / Tài liệu
+
+| Tuần | Việc cụ thể | Bàn giao |
+|---|---|---|
+| 1 | Thiết kế ERD; tạo project Supabase; tạo 3 repo Git (`backend`, `admin`, `Frontend`); `.gitignore`; README | ERD + repo + README |
+| 2 | `database_schema.sql` v1 (bảng, index, settings, bậc phí mặc định) + `seed_data.sql` v1 | DB có dữ liệu mẫu |
+| 3 | `moderation_logs`, index tra cứu, view `v_platform_revenue` | Audit + báo cáo doanh thu |
+| 4 | Seed đơn mẫu (COMPLETED có phí + PENDING), transaction, review; script reset dữ liệu | Dữ liệu demo đồng bộ |
+| 5 | Supabase Storage bucket `passuni` + policy; `FileUploadService`; fallback lưu local khi dev | Ảnh lưu trên cloud |
+| 6 | Mở rộng seed (23 user, 25 tin, 8 đơn, chat/review/notification); script truncate an toàn | Bộ dữ liệu demo đầy đủ |
+| 7 | Rà soát toàn bộ `docs/*.md`; viết hướng dẫn cài đặt; đóng gói nộp bài | Hồ sơ nộp hoàn chỉnh |
+
+---
+
+## 6. Phân bổ khối lượng (ước lượng)
 
 | TV | Tuần 1 | 2 | 3 | 4 | 5 | 6 | 7 | Tổng (người·ngày) |
 |---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
@@ -232,7 +337,7 @@ gantt
 
 ---
 
-## 6. Quản lý rủi ro
+## 7. Quản lý rủi ro
 
 | Rủi ro | Khả năng | Ảnh hưởng | Phương án |
 |---|---|---|---|
@@ -245,7 +350,7 @@ gantt
 
 ---
 
-## 7. Định nghĩa "Hoàn thành" (Definition of Done)
+## 8. Định nghĩa "Hoàn thành" (Definition of Done)
 
 Một task chỉ được coi là xong khi:
 
@@ -258,7 +363,7 @@ Một task chỉ được coi là xong khi:
 
 ---
 
-## 8. Checklist demo cuối kỳ (dùng cho buổi bảo vệ)
+## 9. Checklist demo cuối kỳ (dùng cho buổi bảo vệ)
 
 | # | Kịch bản | Kỳ vọng |
 |---|---|---|
@@ -274,7 +379,7 @@ Một task chỉ được coi là xong khi:
 
 ---
 
-## 9. Công cụ & môi trường
+## 10. Công cụ & môi trường
 
 | Hạng mục | Công cụ |
 |---|---|
