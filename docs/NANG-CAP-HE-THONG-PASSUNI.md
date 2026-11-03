@@ -647,4 +647,73 @@ sequenceDiagram
 > Lưu ý: anon key nằm trong app nên **không phải bí mật**. Toàn bộ bảo vệ dựa trên
 > view + RPC + revoke quyền bảng. Không dùng `service_role` key trong app.
 
+---
+
+## 17. Sửa lỗi ĐĂNG NHẬP / ĐĂNG KÝ không được
+
+### 17.1. Nguyên nhân gốc
+
+| # | Lỗi | Hệ quả |
+|---|---|---|
+| 1 | Chưa chạy `supabase_direct_setup.sql` trên Supabase | Không có `api_login`, `api_register`, `api_me` → app gọi `/rest/v1/rpc/api_*` trả **404 PGRST202** |
+| 2 | Chưa chạy `seed_data.sql` | Bảng `users` rỗng → không có tài khoản nào để đăng nhập |
+| 3 | Constraint cũ `users_role_check` chỉ cho `STUDENT`/`ADMIN` | Seed tài khoản `MODERATOR` thất bại → **toàn bộ** câu `INSERT INTO users ... VALUES (...)` bị rollback |
+| 4 | Constraint cũ `products_item_condition_check` chỉ cho `GOOD_80` | Seed sản phẩm (dùng `GOOD_85` theo enum backend) thất bại |
+| 5 | RLS bật trên `categories` / `universities` nhưng **không có policy** | App nhận mảng rỗng → danh mục & trường trống |
+| 6 | File `supabase_direct_setup.sql` có BOM ở đầu | Chạy bằng CLI báo `syntax error at or near "?"` |
+| 7 | Seed trùng email `hoangphuc@uit.edu.vn` ở 2 khối INSERT | Tài khoản demo bị `ON CONFLICT DO NOTHING` giữ mật khẩu cũ (`password123`) thay vì `123456` |
+
+### 17.2. Đã sửa
+
+- `database_schema.sql`
+  - `chk_users_role CHECK (role IN ('STUDENT','ADMIN','MODERATOR'))`
+  - `chk_products_item_condition CHECK (item_condition IN ('NEW_100','LIKE_NEW_95','GOOD_85','USABLE'))`
+  - `chk_products_status CHECK (status IN ('PENDING','APPROVED','REJECTED','IN_TRANSACTION','SOLD','HIDDEN'))`
+  - Tất cả dạng *drop-if-exists → add* nên chạy lại nhiều lần vẫn an toàn.
+- `seed_data.sql`
+  - Bỏ hash BCrypt hard-code, dùng `crypt('password123', gen_salt('bf'))`
+  - Đổi email trùng `hoangphuc@uit.edu.vn` (khối 4) → `phuc.tran@uit.edu.vn`
+  - `GOOD_80` → `GOOD_85`
+- `supabase_direct_setup.sql`
+  - Thêm policy đọc công khai cho `categories` và `universities`
+  - Bỏ BOM UTF-8 ở đầu file
+- App (`SupabaseRepository.kt`, `SupabaseModels.kt`)
+  - Thông báo lỗi tiếng Việt cho `PGRST202` và `permission denied / 42501`
+  - `conditionLabelOf` hiểu đúng bộ enum mới (`GOOD_85`, `USABLE`)
+
+### 17.3. Thứ tự chạy SQL (bắt buộc)
+
+```
+1) database_schema.sql        -- bảng, constraint, view doanh thu
+2) seed_data.sql              -- dữ liệu mẫu (idempotent)
+3) supabase_direct_setup.sql  -- view + RPC + GRANT + RLS + storage bucket
+```
+
+### 17.4. Tài khoản demo (đã xác minh đăng nhập OK)
+
+| Email | Mật khẩu | Vai trò |
+|---|---|---|
+| `admin@chodocu.edu.vn` | `admin123` | ADMIN |
+| `minhthu@student.vnuhcm.edu.vn` | `123456` | STUDENT |
+| `hoangphuc@uit.edu.vn` | `123456` | STUDENT |
+| `admin@passuni.vn` | `password123` | ADMIN |
+| `mod@passuni.vn` | `password123` | MODERATOR |
+
+### 17.5. Kiểm tra nhanh bằng curl
+
+```bash
+curl -s -X POST "https://ovxnlepmewindufcgxln.supabase.co/rest/v1/rpc/api_login" \
+  -H "apikey: <ANON_KEY>" -H "Authorization: Bearer <ANON_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{"p_email":"admin@chodocu.edu.vn","p_password":"admin123"}'
+# -> [{"out_token":"...","out_user_id":8}]
+```
+
+### 17.6. Trạng thái dữ liệu sau khi fix
+
+`universities = 5`, `categories = 8`, `users = 10`, `products = 10`
+(6 APPROVED hiển thị công khai + 4 PENDING chờ duyệt), `product_images` đầy đủ,
+`order_requests` có 1 đơn COMPLETED (có phí sàn) + 1 đơn PENDING.
+
+
 
