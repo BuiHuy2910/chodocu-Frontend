@@ -83,8 +83,8 @@ fun PassUniAnimatedPopup(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(60.dp)
-                        .clip(RoundedCornerShape(18.dp))
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
                         .background(bgTint),
                     contentAlignment = Alignment.Center
                 ) {
@@ -92,31 +92,29 @@ fun PassUniAnimatedPopup(
                         imageVector = icon,
                         contentDescription = null,
                         tint = tintColor,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 Text(
                     text = state.title,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFF131B2E),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color(0xFF12181F),
                     textAlign = TextAlign.Center
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
                     text = state.message,
-                    fontSize = 14.sp,
-                    color = Color(0xFF475569),
-                    textAlign = TextAlign.Center,
-                    lineHeight = 20.sp
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFF667085),
+                    textAlign = TextAlign.Center
                 )
 
-                Spacer(modifier = Modifier.height(22.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
                 Button(
                     onClick = {
@@ -125,14 +123,13 @@ fun PassUniAnimatedPopup(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp),
-                    shape = RoundedCornerShape(14.dp),
+                        .height(46.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary)
                 ) {
                     Text(
                         text = state.confirmText,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.labelLarge,
                         color = Color.White
                     )
                 }
@@ -154,15 +151,15 @@ fun OrderMeetupDialog(
 ) {
     var offeredPriceText by remember { mutableStateOf(defaultPrice.toPlainString()) }
     var meetupSpot by remember { mutableStateOf(defaultSpot) }
-    var meetupTime by remember { mutableStateOf("17:00 Chiều nay") }
-    var note by remember { mutableStateOf("Mình qua sảnh KTX xem đồ đúng giờ nhé!") }
+    var meetupTime by remember { mutableStateOf("17:00 hôm nay") }
+    var note by remember { mutableStateOf("") }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
         ) {
             Column(
                 modifier = Modifier

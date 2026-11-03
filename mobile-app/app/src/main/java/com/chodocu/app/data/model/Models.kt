@@ -125,6 +125,7 @@ data class OrderCreateRequest(
 
 data class OrderDto(
     val id: Long,
+    val orderCode: String? = null,
     val product: ProductDto,
     val buyer: UserDto,
     val seller: UserDto,
@@ -135,7 +136,39 @@ data class OrderDto(
     val sellerNote: String?,
     val status: String,
     val statusLabel: String,
-    val createdAt: String
+    val paymentStatus: String? = null,
+    val feePayer: String? = null,
+    val platformFeeRate: BigDecimal? = null,
+    val platformFeeAmount: BigDecimal? = null,
+    val finalSellerAmount: BigDecimal? = null,
+    val finalBuyerAmount: BigDecimal? = null,
+    val cancelReason: String? = null,
+    val disputeReason: String? = null,
+    val createdAt: String,
+    val completedAt: String? = null
+)
+
+/** Kết quả tính phí sàn trả về từ backend. */
+data class FeeCalculationDto(
+    val orderAmount: BigDecimal = BigDecimal.ZERO,
+    val feeRate: BigDecimal = BigDecimal.ZERO,
+    val feeRatePercent: String = "0",
+    val platformFeeAmount: BigDecimal = BigDecimal.ZERO,
+    val sellerReceiveAmount: BigDecimal = BigDecimal.ZERO,
+    val buyerPayAmount: BigDecimal = BigDecimal.ZERO,
+    val feePayer: String = "SELLER",
+    val appliedTierName: String? = null,
+    val feeEnabled: Boolean = true
+)
+
+/** Cập nhật hồ sơ cá nhân (bao gồm avatar & bio). */
+data class UpdateProfileRequest(
+    val fullName: String? = null,
+    val phone: String? = null,
+    val dormArea: String? = null,
+    val universityId: Long? = null,
+    val avatarUrl: String? = null,
+    val bio: String? = null
 )
 
 data class ChatMessageRequest(

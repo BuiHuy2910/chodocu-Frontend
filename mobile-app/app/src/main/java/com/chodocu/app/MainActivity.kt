@@ -188,14 +188,19 @@ fun PassUniMainApp(viewModel: MainViewModel = viewModel()) {
                         onOpenAuth = { currentScreen = AppScreen.AUTH }
                     )
                     AppScreen.DETAIL -> {
-                        val prod = selectedProduct ?: MainViewModel.defaultProducts().first()
-                        ProductDetailScreen(
-                            product = prod,
-                            viewModel = viewModel,
-                            onBack = { currentScreen = AppScreen.HOME },
-                            onOpenChat = { currentScreen = AppScreen.CHAT },
-                            onRequireAuth = { currentScreen = AppScreen.AUTH }
-                        )
+                        val prod = selectedProduct
+                        if (prod == null) {
+                            // Không có sản phẩm được chọn -> quay về trang chủ
+                            LaunchedEffect(Unit) { currentScreen = AppScreen.HOME }
+                        } else {
+                            ProductDetailScreen(
+                                product = prod,
+                                viewModel = viewModel,
+                                onBack = { currentScreen = AppScreen.HOME },
+                                onOpenChat = { currentScreen = AppScreen.CHAT },
+                                onRequireAuth = { currentScreen = AppScreen.AUTH }
+                            )
+                        }
                     }
                     AppScreen.CREATE_POST -> CreatePostScreen(
                         viewModel = viewModel,

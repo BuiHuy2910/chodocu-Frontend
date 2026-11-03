@@ -1,6 +1,7 @@
 package com.chodocu.app.data.api
 
 import com.chodocu.app.data.model.*
+import okhttp3.MultipartBody
 import retrofit2.Response
 import retrofit2.http.*
 import java.math.BigDecimal
@@ -16,6 +17,24 @@ interface ApiService {
 
     @GET("auth/me")
     suspend fun getCurrentUser(): Response<ApiResponse<UserDto>>
+
+    @PUT("auth/profile")
+    suspend fun updateProfile(@Body request: UpdateProfileRequest): Response<ApiResponse<UserDto>>
+
+    @PUT("auth/avatar")
+    suspend fun updateAvatar(@Body body: Map<String, String>): Response<ApiResponse<UserDto>>
+
+    /** Upload ảnh (multipart) lên Supabase Storage qua backend. Trả về URL công khai. */
+    @Multipart
+    @POST("upload")
+    suspend fun uploadImage(
+        @Part file: MultipartBody.Part,
+        @Query("folder") folder: String = "products"
+    ): Response<ApiResponse<Map<String, String>>>
+
+    /** Xem trước phí sàn cho một giá trị đơn. */
+    @GET("orders/fee-preview")
+    suspend fun previewFee(@Query("amount") amount: BigDecimal): Response<ApiResponse<FeeCalculationDto>>
 
     // 2. Danh mục & Trường Đại học
     @GET("categories")
