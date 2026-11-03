@@ -1,0 +1,29 @@
+# ---- Android / Gradle ----
+mobile-app/.gradle/
+mobile-app/build/
+mobile-app/app/build/
+mobile-app/local.properties
+mobile-app/.idea/
+mobile-app/captures/
+*.apk
+*.aab
+*.hprof
+
+# Giữ lại gradle wrapper jar (bắt buộc để build)
+!mobile-app/gradle/wrapper/gradle-wrapper.jar
+
+# ---- Node ----
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# ---- Log / tạm ----
+*.log
+*.tmp
+build-*.log
+
+# ---- IDE / OS ----
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
