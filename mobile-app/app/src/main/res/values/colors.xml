@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Màu thương hiệu (trùng với ui/theme/Color.kt) -->
+    <color name="brand_green">#FF0D6531</color>
+    <color name="brand_orange">#FFFE6B1D</color>
+    <color name="app_background">#FFF6F7F8</color>
+</resources>

@@ -1,7 +1,9 @@
-# PassUni — Tài liệu nâng cấp hệ thống (Phiên bản 3.0)
+# Chợ Đồ Cũ — Tài liệu nâng cấp hệ thống (Phiên bản 4.0)
+
+> Tên cũ của dự án: PassUni (tên bucket Storage `passuni` vẫn giữ nguyên).
 
 > Chợ đồ cũ sinh viên: **Android (Kotlin/Compose) + Spring Boot 3 + Supabase (PostgreSQL + Storage) + Admin Web**
-> Cập nhật: 2026-11-02
+> Cập nhật: 2026-11-17 (mục 20)
 
 ---
 
@@ -870,7 +872,7 @@ chodocu-admin/
 |---|---|
 | Nền | `#F6F7F8` |
 | Card | trắng + viền `1px #E4E7EC`, radius 12/16 |
-| Thương hiệu | emerald `#0B6B4A` |
+| Thương hiệu | xanh `#0D6531` (trùng app, từ v4 — trước đó `#0B6B4A`) |
 | Cảnh báo / lỗi / thông tin | `#B4530A` / `#B42318` / `#0D5C8C` |
 | Chữ | `#1A1D21` / `#4A5059` / `#737B86` / `#98A0AA` |
 | Radius | 6 / 8 / 12 / 16 / full |
@@ -895,7 +897,7 @@ viết CSS thuần vào `css/admin.css`.
 | **Sản phẩm** | Bảng sticky header, skeleton loading, badge có chấm màu, modal chi tiết có gallery + grid thông tin, **modal "Nhật ký duyệt"** gọi `/admin/moderation-logs` |
 | **Đơn hàng** | Nút thao tác theo trạng thái; thay `prompt()` bằng modal ghi chú (`PU.ui.askNote`) |
 | **Tài chính** | KPI + cấu hình phí + bậc phí CRUD + mô phỏng phí (gọi `/admin/fee/preview`) + bảng giao dịch |
-| **Người dùng** | Ảnh thật từ API (fallback pravatar JPEG), hàng bị khoá mờ 55%, đổi role chỉ hiện với ADMIN, thay `confirm()` bằng modal |
+| **Người dùng** | Ảnh thật từ API (thiếu ảnh → chữ cái đầu tên, không dùng ảnh tạo tự động), hàng bị khoá mờ 55%, đổi role chỉ hiện với ADMIN, thay `confirm()` bằng modal |
 | **Báo cáo** | Xử lý / bác bỏ trong modal, badge đếm số PENDING |
 | **Cài đặt** | Mỗi setting 1 dòng có mô tả + "cập nhật bởi", kiểm tra kết nối backend, hiển thị `API_BASE` & Supabase URL |
 
@@ -919,8 +921,112 @@ Get-ChildItem -Recurse -Filter *.js | ForEach-Object { node --check $_.FullName 
 duyệt bài → sản phẩm → đơn hàng → tài chính → người dùng → báo cáo → cài đặt,
 không có lỗi JavaScript; `document.documentElement.scrollWidth == window.innerWidth`.
 
+---
 
+## 20. Nâng cấp v4: UX/UI app, chat, điểm hẹn, duyệt bài, logo (11/2026)
 
+### 20.1. Tóm tắt thay đổi
 
+| Hạng mục | Trước | Sau |
+|---|---|---|
+| Đăng ký / đăng nhập | Bắt email sinh viên + cờ "xác thực sinh viên" | Đăng ký bằng email bất kỳ, xong là dùng được. Bỏ cột / nút "Xác thực" ở admin và API `toggle-verified` |
+| Điểm hẹn | App tự chọn sẵn điểm đầu tiên | Người dùng **tự chọn** trong danh sách điểm hẹn chuẩn của trường; server kiểm tra lại ở tin đăng, đặt mua và tin nhắn hẹn gặp |
+| Giờ hẹn | Gõ tay, không kiểm tra | Chọn ngày giờ; lưu dạng `yyyy-MM-ddTHH:mm` (giờ Việt Nam), phải sau hiện tại và trong 30 ngày |
+| Ảnh | Ảnh mẫu / ảnh tạo tự động | Tải ảnh thật: ảnh tin đăng, ảnh đại diện (đổi / xem / gỡ), ảnh trong chat. Thiếu ảnh → biểu tượng hoặc chữ cái đầu tên |
+| Chat | Danh sách tin đơn giản | Gửi tức thì + "Gửi lại" khi lỗi, nhóm tin theo người / ngày, "Đã xem", trả giá, đề xuất hẹn gặp, thẻ món đồ, banner giao dịch (chấp nhận / hoàn tất / huỷ ngay trong chat), gọi điện khi đã chốt hẹn, câu trả lời nhanh, xem ảnh toàn màn hình |
+| Quyền riêng tư | Email / SĐT người bán trả cho mọi người | Người khác chỉ thấy thông tin công khai; **SĐT chỉ hiện khi đơn đã chốt hẹn** (ACCEPTED / COMPLETED / DISPUTED); admin vẫn thấy đủ |
+| Thời gian | Lưu theo giờ máy chủ | Lưu **UTC**; API trả thêm `createdAtIso`… có `Z`, chuỗi hiển thị (`createdAt`) đã đổi sang giờ Việt Nam |
+| Admin | UI ẩn mục theo vai trò nhưng backend vẫn mở | Phân quyền khớp UI ↔ backend (`@PreAuthorize(ADMIN_ONLY)`), Moderator không xoá tin |
+| Logo | Icon tạm | Logo theo mẫu: túi cam + mũi tên tái chế + kính lúp, sinh tự động (`docs/brand/`) |
 
+### 20.2. Cập nhật database (Supabase)
 
+Chạy lại **đúng thứ tự** trong SQL Editor:
+
+```
+1. database_schema.sql        -- CREATE TABLE IF NOT EXISTS: không xoá dữ liệu cũ
+2. seed_data.sql              -- tuỳ chọn, idempotent (chạy lại không nhân đôi)
+3. supabase_direct_setup.sql  -- view + hàm RPC mới (luật điểm hẹn, chat, ảnh đại diện…)
+```
+
+- Bước 3 là bắt buộc: app ở chế độ Supabase gọi các hàm `api_*` trong file này.
+- Seed dùng `ON CONFLICT DO NOTHING`, nên tên hiển thị mới ("Chợ Đồ Cũ") chỉ áp dụng cho
+  database mới. Database cũ: đổi `app_name` ở **Admin → Cài đặt**.
+
+### 20.3. Cấu trúc app mobile
+
+```
+com.chodocu.app
+├── core/            AppConfig (chọn Supabase / backend), Formatters, Validators, SafeCall
+├── data/
+│   ├── model/       Model dùng chung (Product, Order, ChatMessage, User…)
+│   ├── repository/  Interface: AuthRepository, ProductRepository, OrderRepository, ChatRepository…
+│   ├── supabase/    Cài đặt repository gọi thẳng Supabase (REST + RPC) — mặc định
+│   ├── backend/     Cài đặt repository gọi Spring Boot (khi USE_SUPABASE_DIRECT = false)
+│   ├── session/     Lưu phiên đăng nhập
+│   └── upload/      Nén ảnh trước khi tải lên
+├── di/              AppContainer (chọn bộ repository) + appViewModel { … }
+└── ui/              Mỗi màn một thư mục: auth, home, product, post, chat, orders,
+                     profile, notifications; components/ và theme/ dùng chung
+```
+
+Quy ước cho mỗi màn hình:
+
+- `XxxViewModel` giữ một `StateFlow<XxxUiState>` duy nhất, cập nhật bằng `_uiState.update { … }`.
+- Gọi repository qua `safeCall { … }.onSuccess { … }.onFailure { e -> e.toUserMessage() }`.
+- Thông báo một lần (Snackbar) đi qua `userMessage` + `userMessageShown()`.
+- `XxxScreen` chỉ vẽ giao diện từ state và gọi hàm của ViewModel.
+
+### 20.4. Luật nghiệp vụ dùng chung (SQL ↔ Spring Boot)
+
+Hai chế độ (Supabase trực tiếp và Spring Boot) áp dụng **cùng một luật**:
+
+| Luật | SQL (`supabase_direct_setup.sql`) | Spring Boot |
+|---|---|---|
+| Điểm hẹn thuộc danh sách của trường, giờ hẹn hợp lệ trong 30 ngày | `_university_spots`, `_check_meetup_time` | `MeetupRules` |
+| Tin TEXT cần nội dung; IMAGE cần link http(s); OFFER cần giá > 0; MEETUP cần điểm + giờ hẹn | `api_send_message` | `ChatService.fillByType` |
+| OFFER / MEETUP phải gắn món đồ của một trong hai người | `api_send_message` | `ChatService.findConversationProduct` |
+| Không ghi chú → tự điền "Mình đề nghị giá …" / "Mình đề xuất hẹn gặp tại … lúc …" (app ẩn câu này trong thẻ vì đã hiện đủ thông tin) | `api_send_message` | `ChatService.fillByType` |
+| Ảnh đại diện rỗng = gỡ ảnh; có thì phải là link http(s) | `api_update_avatar` | `AuthService.updateAvatar` |
+| SĐT chỉ hiện khi đơn ACCEPTED / COMPLETED / DISPUTED | `_order_json` | `DtoMapper.PHONE_VISIBLE` |
+| Tiền hiển thị dạng `120.000 đ` | `_price_text` | `DisplayFormat.money` |
+
+Sửa luật ở một bên thì **sửa luôn bên kia** để hai chế độ chạy giống nhau.
+
+### 20.5. Phân quyền trang admin
+
+| Mục | ADMIN | MODERATOR |
+|---|---|---|
+| Tổng quan, Duyệt bài, Sản phẩm (ẩn / hiện tin), Báo cáo vi phạm | ✔ | ✔ |
+| Xoá tin vĩnh viễn | ✔ | ✘ |
+| Đơn hàng, Tài chính & phí sàn, Người dùng, Cài đặt | ✔ | ✘ (ẩn trên giao diện, backend trả 403) |
+
+Chi tiết: `chodocu-admin/README.md` mục "Phân quyền ADMIN / MODERATOR".
+
+### 20.6. Logo & thương hiệu
+
+Xem `docs/brand/README.md`. Mọi file logo (vector Android, SVG, PNG) sinh từ một script:
+
+```powershell
+python docs/brand/make_logo.py mobile-app/app/src/main/res/drawable docs/brand
+```
+
+### 20.7. Kiểm chứng
+
+```powershell
+# App: biên dịch lại toàn bộ (0 lỗi, 0 cảnh báo) và build APK
+cd mobile-app
+.\gradlew :app:compileDebugKotlin --rerun-tasks
+.\gradlew :app:assembleDebug
+
+# Backend
+cd ..\..\chodocu-backend
+.\mvnw.cmd -q -DskipTests compile
+
+# Admin: kiểm tra cú pháp toàn bộ JS
+cd ..\chodocu-admin
+Get-ChildItem -Recurse -Filter *.js | ForEach-Object { node --check $_.FullName }
+```
+
+Trang admin đã chụp màn hình kiểm tra với dữ liệu giả (đăng nhập desktop / mobile, Người dùng,
+Sản phẩm dưới quyền Moderator). Luồng app trên thiết bị thật cần chạy lại SQL ở mục 20.2 trước.

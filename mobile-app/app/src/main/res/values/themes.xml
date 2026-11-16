@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.PassUniChoDoCu" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Theme của cửa sổ (trước khi Compose vẽ): nền sáng, không ActionBar -->
+    <style name="Theme.ChoDoCu" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/app_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
 </resources>
-
