@@ -132,6 +132,12 @@ interface BackendApi {
     @PUT("notifications/mark-all-read")
     suspend fun markAllNotificationsRead(): Response<JsonObject>
 
+    @POST("notifications/device-token")
+    suspend fun registerDeviceToken(@Body body: JsonObject): Response<JsonObject>
+
+    @DELETE("notifications/device-token")
+    suspend fun unregisterDeviceToken(@Query("token") token: String): Response<JsonObject>
+
     // ---- Ảnh ----
     @Multipart
     @POST("upload")

@@ -9,6 +9,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.chodocu.app.di.LocalAppContainer
+import com.chodocu.app.push.PushTarget
 import com.chodocu.app.ui.auth.LoginScreen
 import com.chodocu.app.ui.auth.RegisterScreen
 import kotlinx.coroutines.CancellationException
@@ -19,7 +20,10 @@ import kotlinx.coroutines.CancellationException
  * Đăng nhập, đăng xuất hay hết phiên chỉ cần đổi session — màn hình tự chuyển theo.
  */
 @Composable
-fun AppRoot() {
+fun AppRoot(
+    pushTarget: PushTarget? = null,
+    onPushTargetHandled: () -> Unit = {},
+) {
     val container = LocalAppContainer.current
     val user by container.session.currentUser.collectAsStateWithLifecycle()
 
@@ -37,7 +41,15 @@ fun AppRoot() {
     }
 
     Crossfade(targetState = user?.id, label = "appRoot") { userId ->
-        if (userId == null) AuthNavHost() else MainShell(userId = userId)
+        if (userId == null) {
+            AuthNavHost()
+        } else {
+            MainShell(
+                userId = userId,
+                pushTarget = pushTarget,
+                onPushTargetHandled = onPushTargetHandled,
+            )
+        }
     }
 }
 

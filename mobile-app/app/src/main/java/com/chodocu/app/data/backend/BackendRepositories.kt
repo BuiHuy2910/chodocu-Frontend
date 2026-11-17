@@ -56,10 +56,11 @@ import okhttp3.RequestBody.Companion.toRequestBody
 fun createBackendRepositories(
     session: SessionManager,
     compressor: ImageCompressor,
+    onBeforeLogout: suspend () -> Unit = {},
 ): Repositories {
     val client = BackendClient(session)
     return Repositories(
-        auth = BackendAuthRepository(client, session),
+        auth = BackendAuthRepository(client, session, onBeforeLogout),
         catalog = BackendCatalogRepository(client),
         products = BackendProductRepository(client),
         orders = BackendOrderRepository(client),
@@ -75,6 +76,7 @@ fun createBackendRepositories(
 private class BackendAuthRepository(
     private val client: BackendClient,
     private val session: SessionManager,
+    private val onBeforeLogout: suspend () -> Unit,
 ) : AuthRepository {
 
     override suspend fun login(email: String, password: String): User =
@@ -91,8 +93,17 @@ private class BackendAuthRepository(
         return saveSession(client.callObject { register(body) })
     }
 
-    /** JWT không cần báo máy chủ khi đăng xuất: chỉ cần xóa phiên trên máy. */
-    override suspend fun logout() = session.clear()
+    /** Hủy token đẩy (best-effort) rồi xóa phiên trên máy. */
+    override suspend fun logout() {
+        try {
+            onBeforeLogout()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+        } finally {
+            session.clear()
+        }
+    }
 
     override suspend fun refreshCurrentUser(): User =
         client.callObject { me() }.toUser().also(session::updateUser)
@@ -306,6 +317,19 @@ private class BackendNotificationRepository(private val client: BackendClient) :
     override suspend fun getUnreadCount(): Int = client.callObject { unreadNotificationCount() }.int("count")
 
     override suspend fun markAllRead() = client.run { markAllNotificationsRead() }
+
+    override suspend fun registerDeviceToken(token: String, packageName: String) {
+        val body = client.body(
+            "token" to token,
+            "platform" to "ANDROID",
+            "packageName" to packageName,
+        )
+        client.run { registerDeviceToken(body) }
+    }
+
+    override suspend fun unregisterDeviceToken(token: String) {
+        client.run { unregisterDeviceToken(token) }
+    }
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -14,6 +14,7 @@ import com.chodocu.app.data.repository.UploadRepository
 import com.chodocu.app.data.session.SessionManager
 import com.chodocu.app.data.supabase.createSupabaseRepositories
 import com.chodocu.app.data.upload.ImageCompressor
+import com.chodocu.app.push.PushNotificationManager
 
 /**
  * "Hộp" chứa các đối tượng dùng chung của app (DI thủ công, không cần thư viện).
@@ -30,7 +31,9 @@ class AppContainer(context: Context) {
         if (AppConfig.USE_SUPABASE_DIRECT) {
             createSupabaseRepositories(session, imageCompressor)
         } else {
-            createBackendRepositories(session, imageCompressor)
+            createBackendRepositories(session, imageCompressor) {
+                PushNotificationManager.unregisterFromBackend(appContext, notifications)
+            }
         }
 
     val auth: AuthRepository = repositories.auth

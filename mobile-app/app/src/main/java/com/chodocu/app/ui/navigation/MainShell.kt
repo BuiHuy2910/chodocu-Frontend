@@ -1,5 +1,10 @@
 package com.chodocu.app.ui.navigation
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,7 +41,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -44,7 +51,11 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.chodocu.app.data.model.OrderRole
+import com.chodocu.app.di.LocalAppContainer
 import com.chodocu.app.di.appViewModel
+import com.chodocu.app.push.PushNotificationManager
+import com.chodocu.app.push.PushTarget
 import com.chodocu.app.ui.components.CountBadge
 import com.chodocu.app.ui.components.PollWhileResumed
 import com.chodocu.app.ui.theme.BrandOrange
@@ -79,13 +90,70 @@ private val tabRoutes = (leftTabs + rightTabs).map { it.routePattern }.toSet()
  * [userId] dùng làm khóa ViewModel để đổi tài khoản thì số chưa đọc được tính lại từ đầu.
  */
 @Composable
-fun MainShell(userId: Long) {
+fun MainShell(
+    userId: Long,
+    pushTarget: PushTarget? = null,
+    onPushTargetHandled: () -> Unit = {},
+) {
+    val context = LocalContext.current
+    val container = LocalAppContainer.current
     val navController = rememberNavController()
     val shellViewModel = appViewModel(key = "shell-$userId") { _ -> MainShellViewModel(chat, notifications) }
     val badges by shellViewModel.badges.collectAsStateWithLifecycle()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
     val showBottomBar = currentDestination?.route in tabRoutes
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = {},
+    )
+
+    // Xin quyền thông báo (Android 13+) và đồng bộ FCM token về backend mỗi khi vào phiên đăng nhập
+    LaunchedEffect(userId) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        PushNotificationManager.syncTokenWithBackend(context, container.notifications)
+    }
+
+    // Điều hướng khi người dùng bấm vào thông báo đẩy
+    LaunchedEffect(pushTarget, userId) {
+        val target = pushTarget ?: return@LaunchedEffect
+        shellViewModel.refreshBadges()
+        when {
+            target.type == "CHAT_MESSAGE" && target.partnerId != null -> {
+                navController.navigate(
+                    Routes.chatThread(target.partnerId, target.productId, target.partnerName ?: "Người dùng"),
+                ) { launchSingleTop = true }
+            }
+            target.type == "PRODUCT_APPROVED" && target.referenceId != null -> {
+                navController.navigate(Routes.productDetail(target.referenceId)) { launchSingleTop = true }
+            }
+            target.type.startsWith("PRODUCT_") -> {
+                navController.navigate(Routes.MY_POSTS) { launchSingleTop = true }
+            }
+            target.type.startsWith("ORDER_") -> {
+                val role = if (target.type in setOf("ORDER_RECEIVED", "ORDER_CANCELLED")) {
+                    OrderRole.SELLER
+                } else {
+                    OrderRole.BUYER
+                }
+                navController.navigate(Routes.orders(role)) {
+                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = false
+                }
+            }
+            else -> {
+                navController.navigate(Routes.NOTIFICATIONS) { launchSingleTop = true }
+            }
+        }
+        onPushTargetHandled()
+    }
 
     // Cập nhật huy hiệu khi đổi màn hình và định kỳ khi app đang mở
     LaunchedEffect(currentDestination?.route) { shellViewModel.refreshBadges() }
