@@ -11,7 +11,7 @@ package com.chodocu.app.core
  */
 object AppConfig {
 
-    const val USE_SUPABASE_DIRECT: Boolean = true
+    const val USE_SUPABASE_DIRECT: Boolean = false
 
     const val SUPABASE_URL: String = "https://ovxnlepmewindufcgxln.supabase.co"
 
