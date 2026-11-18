@@ -41,6 +41,9 @@ import com.chodocu.app.data.repository.ProductRepository
 import com.chodocu.app.data.repository.Repositories
 import com.chodocu.app.data.repository.UploadRepository
 import com.chodocu.app.data.session.SessionManager
+import com.chodocu.app.data.supabase.SupabaseClient
+import com.chodocu.app.data.supabase.toCategory as toSupabaseCategory
+import com.chodocu.app.data.supabase.toUniversity as toSupabaseUniversity
 import com.chodocu.app.data.upload.ImageCompressor
 import com.google.gson.JsonObject
 import kotlinx.coroutines.sync.Mutex
@@ -59,9 +62,10 @@ fun createBackendRepositories(
     onBeforeLogout: suspend () -> Unit = {},
 ): Repositories {
     val client = BackendClient(session)
+    val supabase = SupabaseClient(session)
     return Repositories(
         auth = BackendAuthRepository(client, session, onBeforeLogout),
-        catalog = BackendCatalogRepository(client),
+        catalog = BackendCatalogRepository(client, supabase),
         products = BackendProductRepository(client),
         orders = BackendOrderRepository(client),
         chat = BackendChatRepository(client),
@@ -142,21 +146,38 @@ private class BackendAuthRepository(
 }
 
 // ---------------------------------------------------------------------------------------------
-// Danh mục, trường (lưu tạm trong bộ nhớ sau lần tải đầu)
+// Danh mục, trường (lưu tạm trong bộ nhớ sau lần tải đầu, có fallback Supabase nếu backend chưa bật)
 // ---------------------------------------------------------------------------------------------
-private class BackendCatalogRepository(private val client: BackendClient) : CatalogRepository {
+private class BackendCatalogRepository(
+    private val client: BackendClient,
+    private val supabase: SupabaseClient,
+) : CatalogRepository {
     private val mutex = Mutex()
     private var cachedCategories: List<Category>? = null
     private var cachedUniversities: List<University>? = null
 
     override suspend fun getCategories(forceRefresh: Boolean): List<Category> = mutex.withLock {
         cachedCategories?.takeUnless { forceRefresh }
-            ?: client.callList { categories() }.map { it.toCategory() }.also { cachedCategories = it }
+            ?: tryFetchCategories().also { cachedCategories = it }
     }
 
     override suspend fun getUniversities(forceRefresh: Boolean): List<University> = mutex.withLock {
         cachedUniversities?.takeUnless { forceRefresh }
-            ?: client.callList { universities() }.map { it.toUniversity() }.also { cachedUniversities = it }
+            ?: tryFetchUniversities().also { cachedUniversities = it }
+    }
+
+    private suspend fun tryFetchCategories(): List<Category> = try {
+        client.callList { categories() }.map { it.toCategory() }
+    } catch (e: Exception) {
+        // Tự động dự phòng sang Supabase Cloud khi backend chưa bật hoặc máy thật không kết nối được 10.0.2.2
+        supabase.fetchCategories().map { it.toSupabaseCategory() }
+    }
+
+    private suspend fun tryFetchUniversities(): List<University> = try {
+        client.callList { universities() }.map { it.toUniversity() }
+    } catch (e: Exception) {
+        // Tự động dự phòng sang Supabase Cloud khi backend chưa bật hoặc máy thật không kết nối được 10.0.2.2
+        supabase.fetchUniversities().map { it.toSupabaseUniversity() }
     }
 }
 
