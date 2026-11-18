@@ -14,6 +14,7 @@ import com.google.gson.JsonElement
 import com.google.gson.JsonNull
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import okhttp3.ConnectionPool
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -81,7 +82,12 @@ class SupabaseClient(private val session: SessionManager) {
         authenticated: Boolean,
     ): JsonElement {
         val body = JsonObject()
-        if (authenticated) body.addProperty("p_token", session.requireToken())
+        if (authenticated) {
+            body.addProperty("p_token", session.requireToken())
+        } else {
+            // Không bắt buộc phiên (ví dụ tìm kiếm tin): gửi kèm nếu có để máy chủ biết người dùng đã thích tin nào
+            session.token?.let { body.addProperty("p_token", it) }
+        }
         params.forEach { (name, value) -> body.add(name, gson.toJsonTree(value)) }
 
         val response = api.rpc(function, body)
@@ -139,6 +145,8 @@ class SupabaseClient(private val session: SessionManager) {
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(60, TimeUnit.SECONDS) // tải ảnh qua mạng yếu có thể lâu
+            .connectionPool(ConnectionPool(5, 5, TimeUnit.MINUTES))
+            .retryOnConnectionFailure(true)
             .addInterceptor { chain ->
                 // Supabase yêu cầu khóa API ở cả hai header
                 val request = chain.request().newBuilder()

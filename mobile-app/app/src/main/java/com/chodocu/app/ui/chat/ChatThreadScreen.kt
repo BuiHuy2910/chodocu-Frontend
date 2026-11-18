@@ -58,8 +58,8 @@ import com.chodocu.app.ui.theme.Space
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 
-/** Hỏi tin mới mỗi 3 giây khi đang mở cuộc trò chuyện. */
-private const val CHAT_POLL_MILLIS = 3_000L
+/** Hỏi tin mới mỗi 5 giây khi đang mở cuộc trò chuyện (giảm tải spam so với 3s). */
+private const val CHAT_POLL_MILLIS = 5_000L
 
 /** Màn trò chuyện giữa người mua và người bán. */
 @Composable

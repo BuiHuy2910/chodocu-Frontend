@@ -54,8 +54,8 @@ import com.chodocu.app.ui.components.openDialer
 import com.chodocu.app.ui.theme.Space
 import kotlinx.coroutines.launch
 
-/** Cập nhật ngầm danh sách đơn mỗi 20 giây khi đang mở màn hình. */
-private const val ORDERS_POLL_MILLIS = 20_000L
+/** Cập nhật ngầm danh sách đơn mỗi 30 giây khi đang mở màn hình. */
+private const val ORDERS_POLL_MILLIS = 30_000L
 
 /** Màn "Giao dịch": đơn mình mua và đơn người khác mua đồ của mình. */
 @Composable

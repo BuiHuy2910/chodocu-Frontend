@@ -53,7 +53,8 @@ import com.chodocu.app.ui.components.UserAvatar
 import com.chodocu.app.ui.theme.Radius
 import com.chodocu.app.ui.theme.Space
 
-private const val INBOX_POLL_MILLIS = 10_000L
+/** Cập nhật ngầm danh sách hội thoại mỗi 20 giây khi đang mở hộp thư. */
+private const val INBOX_POLL_MILLIS = 20_000L
 
 /** Hộp thư: mỗi người từng nhắn tin với mình là một dòng. */
 @Composable

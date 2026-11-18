@@ -6,6 +6,8 @@ import com.chodocu.app.data.repository.ChatRepository
 import com.chodocu.app.data.repository.NotificationRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,17 +30,29 @@ class MainShellViewModel(
     val badges: StateFlow<ShellBadges> = _badges.asStateFlow()
 
     private var refreshJob: Job? = null
+    private var lastRefreshTimestamp: Long = 0L
 
     init {
-        refreshBadges()
+        refreshBadges(force = true)
     }
 
-    /** Tải lại số chưa đọc. Bỏ qua nếu lần tải trước chưa xong; lỗi mạng thì giữ số cũ. */
-    fun refreshBadges() {
+    /**
+     * Tải lại số chưa đọc.
+     * Bỏ qua nếu lần tải trước chưa xong hoặc vừa tải cách đây dưới 5 giây (tránh spam khi chuyển màn hình liên tục).
+     */
+    fun refreshBadges(force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (!force && (now - lastRefreshTimestamp < MIN_REFRESH_INTERVAL_MS)) return
         if (refreshJob?.isActive == true) return
+
+        lastRefreshTimestamp = now
         refreshJob = viewModelScope.launch {
-            val messages = countOrNull { chat.getUnreadMessageCount() }
-            val notices = countOrNull { notifications.getUnreadCount() }
+            // Tải song song cả tin nhắn và thông báo để giảm độ trễ
+            val (messages, notices) = coroutineScope {
+                val msgDeferred = async { countOrNull { chat.getUnreadMessageCount() } }
+                val notifDeferred = async { countOrNull { notifications.getUnreadCount() } }
+                msgDeferred.await() to notifDeferred.await()
+            }
             _badges.update { old ->
                 old.copy(
                     unreadMessages = messages ?: old.unreadMessages,
@@ -56,4 +70,8 @@ class MainShellViewModel(
         } catch (e: Exception) {
             null
         }
+
+    private companion object {
+        const val MIN_REFRESH_INTERVAL_MS = 5_000L
+    }
 }
