@@ -23,6 +23,7 @@ class SupabaseProductRepository(private val client: SupabaseClient) : ProductRep
             "p_sort" to query.sort.name,
             "p_limit" to pageSize,
             "p_offset" to page * pageSize,
+            authenticated = false,
         )
         return PageResult(
             items = result.array("items").objects().map { it.toProduct() },
@@ -31,7 +32,7 @@ class SupabaseProductRepository(private val client: SupabaseClient) : ProductRep
     }
 
     override suspend fun getProduct(productId: Long): Product =
-        client.callObject("api_get_product", "p_product_id" to productId).toProduct()
+        client.callObject("api_get_product", "p_product_id" to productId, authenticated = false).toProduct()
 
     override suspend fun getMyProducts(): List<Product> =
         client.callList("api_my_posts").map { it.toProduct() }

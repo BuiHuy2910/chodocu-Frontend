@@ -176,9 +176,14 @@ class ChatThreadViewModel(
 
         val server = chat.getMessages(partnerId)
         val newestKnownId = before.messages.lastOrNull()?.id ?: 0L
+        val serverNewestId = server.lastOrNull()?.id ?: 0L
+
+        // Nếu số lượng tin và id tin mới nhất không đổi: bỏ qua để tránh re-render không cần thiết
+        val hasChanges = server.size != before.messages.size || serverNewestId != newestKnownId
+        if (!hasChanges) return
+
         _uiState.update { current ->
             // Tin vừa gửi xong có thể chưa có trong kết quả này -> giữ lại
-            val serverNewestId = server.lastOrNull()?.id ?: 0L
             val sentAfterRequest = current.messages.filter { it.id > serverNewestId }
             current.copy(messages = server + sentAfterRequest)
         }

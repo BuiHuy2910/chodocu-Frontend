@@ -49,8 +49,8 @@ import com.chodocu.app.ui.components.CountBadge
 import com.chodocu.app.ui.components.PollWhileResumed
 import com.chodocu.app.ui.theme.BrandOrange
 
-/** Thời gian giữa hai lần cập nhật huy hiệu chưa đọc. */
-private const val BADGE_POLL_MILLIS = 15_000L
+/** Thời gian giữa hai lần cập nhật huy hiệu chưa đọc (30 giây để tránh hao pin và giảm tải máy chủ). */
+private const val BADGE_POLL_MILLIS = 30_000L
 
 /** Một mục trên thanh điều hướng dưới. */
 private data class BottomTab(

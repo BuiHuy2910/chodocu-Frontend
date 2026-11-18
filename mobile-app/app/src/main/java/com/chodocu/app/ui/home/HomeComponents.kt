@@ -38,6 +38,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
@@ -164,7 +167,7 @@ internal fun HomeFilterBar(
     }
 }
 
-/** Lưới 2 cột các tin đăng; cuộn tới cuối thì tự tải thêm. */
+/** Lưới 2 cột các tin đăng; cuộn tới gần cuối thì tự tải thêm trang mới (không spam lặp). */
 @Composable
 internal fun ProductGrid(
     products: List<Product>,
@@ -175,6 +178,22 @@ internal fun ProductGrid(
     onLoadMore: () -> Unit,
     onOpenProduct: (Long) -> Unit,
 ) {
+    // Chỉ kích hoạt tải thêm khi người dùng thật sự cuộn gần cuối danh sách (cách 4 item trở xuống)
+    val shouldLoadMore by remember(hasMore, isLoadingMore, loadMoreError) {
+        derivedStateOf {
+            if (!hasMore || isLoadingMore || loadMoreError != null) return@derivedStateOf false
+            val lastVisibleItemIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            val totalItemsCount = gridState.layoutInfo.totalItemsCount
+            totalItemsCount > 0 && lastVisibleItemIndex >= totalItemsCount - 4
+        }
+    }
+
+    LaunchedEffect(shouldLoadMore) {
+        if (shouldLoadMore) {
+            onLoadMore()
+        }
+    }
+
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         state = gridState,
@@ -193,10 +212,6 @@ internal fun ProductGrid(
                 loadMoreError = loadMoreError,
                 onLoadMore = onLoadMore,
             )
-            // Ô cuối được hiển thị nghĩa là người dùng đã cuộn tới cuối: tải trang tiếp theo
-            if (hasMore && loadMoreError == null) {
-                LaunchedEffect(products.size) { onLoadMore() }
-            }
         }
     }
 }
