@@ -21,5 +21,5 @@ object AppConfig {
     const val STORAGE_BUCKET: String = "passuni"
 
     /** Địa chỉ backend Spring Boot (chỉ dùng khi tắt chế độ trực tiếp). */
-    const val BACKEND_BASE_URL: String = "https://chodocu.vigogroup.vn/api/"
+    const val BACKEND_BASE_URL: String = "https://api.chodocu.cc.cd/api/"
 }

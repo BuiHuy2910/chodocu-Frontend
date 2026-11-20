@@ -114,11 +114,26 @@ object PushNotificationManager {
 
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            data["type"]?.let { putExtra(EXTRA_TYPE, it) }
-            data["referenceId"]?.toLongOrNull()?.let { putExtra(EXTRA_REFERENCE_ID, it) }
-            data["partnerId"]?.toLongOrNull()?.let { putExtra(EXTRA_PARTNER_ID, it) }
-            data["partnerName"]?.let { putExtra(EXTRA_PARTNER_NAME, it) }
-            data["productId"]?.toLongOrNull()?.let { putExtra(EXTRA_PRODUCT_ID, it) }
+            data["type"]?.let {
+                putExtra("type", it)
+                putExtra(EXTRA_TYPE, it)
+            }
+            data["referenceId"]?.toLongOrNull()?.let {
+                putExtra("referenceId", it.toString())
+                putExtra(EXTRA_REFERENCE_ID, it)
+            }
+            data["partnerId"]?.toLongOrNull()?.let {
+                putExtra("partnerId", it.toString())
+                putExtra(EXTRA_PARTNER_ID, it)
+            }
+            data["partnerName"]?.let {
+                putExtra("partnerName", it)
+                putExtra(EXTRA_PARTNER_NAME, it)
+            }
+            data["productId"]?.toLongOrNull()?.let {
+                putExtra("productId", it.toString())
+                putExtra(EXTRA_PRODUCT_ID, it)
+            }
         }
 
         val requestCode = (System.currentTimeMillis() and 0x7FFFFFFF).toInt()
@@ -145,27 +160,29 @@ object PushNotificationManager {
 
     fun parsePushTarget(intent: Intent?): PushTarget? {
         val extras = intent?.extras ?: return null
-        val type = extras.getString(EXTRA_TYPE)?.takeIf { it.isNotBlank() } ?: return null
-        val referenceId = if (extras.containsKey(EXTRA_REFERENCE_ID)) {
-            extras.getLong(EXTRA_REFERENCE_ID, -1L).takeIf { it > 0L }
-                ?: extras.getString(EXTRA_REFERENCE_ID)?.toLongOrNull()
-        } else null
-        val partnerId = if (extras.containsKey(EXTRA_PARTNER_ID)) {
-            extras.getLong(EXTRA_PARTNER_ID, -1L).takeIf { it > 0L }
-                ?: extras.getString(EXTRA_PARTNER_ID)?.toLongOrNull()
-        } else null
-        val partnerName = extras.getString(EXTRA_PARTNER_NAME)
-        val productId = if (extras.containsKey(EXTRA_PRODUCT_ID)) {
-            extras.getLong(EXTRA_PRODUCT_ID, -1L).takeIf { it > 0L }
-                ?: extras.getString(EXTRA_PRODUCT_ID)?.toLongOrNull()
-        } else null
+        val type = readStringExtra(extras, "type", EXTRA_TYPE) ?: return null
         return PushTarget(
             type = type,
-            referenceId = referenceId,
-            partnerId = partnerId,
-            partnerName = partnerName,
-            productId = productId,
+            referenceId = readLongExtra(extras, "referenceId", EXTRA_REFERENCE_ID),
+            partnerId = readLongExtra(extras, "partnerId", EXTRA_PARTNER_ID),
+            partnerName = readStringExtra(extras, "partnerName", EXTRA_PARTNER_NAME),
+            productId = readLongExtra(extras, "productId", EXTRA_PRODUCT_ID),
         )
+    }
+
+    private fun readStringExtra(extras: android.os.Bundle, vararg keys: String): String? =
+        keys.firstNotNullOfOrNull { key -> extras.getString(key)?.takeIf { it.isNotBlank() } }
+
+    @Suppress("DEPRECATION")
+    private fun readLongExtra(extras: android.os.Bundle, vararg keys: String): Long? {
+        for (key in keys) {
+            if (!extras.containsKey(key)) continue
+            when (val raw = extras.get(key)) {
+                is Number -> return raw.toLong().takeIf { it > 0L }
+                is String -> raw.toLongOrNull()?.takeIf { it > 0L }?.let { return it }
+            }
+        }
+        return null
     }
 
     private suspend fun fetchCurrentFcmToken(): String? = suspendCancellableCoroutine { cont ->
