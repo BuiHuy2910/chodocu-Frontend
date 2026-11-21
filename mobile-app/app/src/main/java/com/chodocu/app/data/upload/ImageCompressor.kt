@@ -11,47 +11,65 @@ import android.net.Uri
 import com.chodocu.app.data.common.ApiException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 
 /**
  * Nén ảnh trước khi tải lên: xoay đúng chiều theo EXIF, thu nhỏ cạnh dài về [MAX_SIDE] px,
  * lưu JPEG chất lượng [QUALITY]. Ảnh 5-10 MB từ camera thường còn khoảng 200-400 KB.
+ * Đọc stream 1 lần duy nhất từ ContentResolver để tránh lỗi Permission Denial trên Android PhotoPicker,
+ * và có cơ chế fallback trả về rawBytes nếu nén gặp sự cố để đảm bảo luôn tải ảnh lên được.
  */
 class ImageCompressor(context: Context) {
 
     private val resolver = context.applicationContext.contentResolver
 
     suspend fun compress(uri: Uri): ByteArray = withContext(Dispatchers.IO) {
-        // 1. Chỉ đọc kích thước ảnh để tính tỉ lệ thu nhỏ, chưa nạp cả ảnh vào bộ nhớ.
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-            ?: throw unreadableImage()
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw unreadableImage()
+        // 1. Chỉ đọc stream đúng 1 lần từ resolver để tránh lỗi đóng luồng hoặc mất quyền truy cập URI.
+        val rawBytes = runCatching {
+            resolver.openInputStream(uri)?.use { it.readBytes() }
+        }.getOrNull() ?: throw unreadableImage()
 
-        // 2. Nạp ảnh đã giảm mẫu (inSampleSize là lũy thừa của 2) để tránh hết bộ nhớ.
-        var sampleSize = 1
-        while (bounds.outWidth / (sampleSize * 2) >= MAX_SIDE || bounds.outHeight / (sampleSize * 2) >= MAX_SIDE) {
-            sampleSize *= 2
-        }
-        val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
-        val decoded = resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
-            ?: throw unreadableImage()
+        if (rawBytes.isEmpty()) throw unreadableImage()
 
-        // 3. Thu nhỏ chính xác, xoay theo EXIF, rồi nén JPEG.
-        val resized = resize(decoded, MAX_SIDE)
-        val rotated = rotate(resized, readRotationDegrees(uri))
-        val opaque = flattenTransparency(rotated)
-        val bytes = ByteArrayOutputStream().use { output ->
-            opaque.compress(Bitmap.CompressFormat.JPEG, QUALITY, output)
-            output.toByteArray()
+        try {
+            // 2. Đọc kích thước ảnh từ mảng byte trong bộ nhớ.
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, bounds)
+
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                // Không lấy được bounds nhưng vẫn có rawBytes hợp lệ -> trả về rawBytes để backend xử lý
+                return@withContext rawBytes
+            }
+
+            // 3. Tính sample size và decode ảnh.
+            var sampleSize = 1
+            while (bounds.outWidth / (sampleSize * 2) >= MAX_SIDE || bounds.outHeight / (sampleSize * 2) >= MAX_SIDE) {
+                sampleSize *= 2
+            }
+            val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+            val decoded = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, options)
+                ?: return@withContext rawBytes
+
+            // 4. Thu nhỏ chính xác, xoay theo EXIF, khử trong suốt rồi nén JPEG.
+            val resized = resize(decoded, MAX_SIDE)
+            val rotated = rotate(resized, readRotationDegrees(rawBytes))
+            val opaque = flattenTransparency(rotated)
+            val bytes = ByteArrayOutputStream().use { output ->
+                opaque.compress(Bitmap.CompressFormat.JPEG, QUALITY, output)
+                output.toByteArray()
+            }
+            opaque.recycle()
+            if (bytes.isNotEmpty()) bytes else rawBytes
+        } catch (e: Exception) {
+            // Trường hợp OOM hoặc format đặc biệt, trả về rawBytes thay vì chặn người dùng
+            rawBytes
         }
-        opaque.recycle()
-        bytes
     }
 
     /** Góc cần xoay theo thông tin EXIF của ảnh chụp từ camera. */
-    private fun readRotationDegrees(uri: Uri): Float = try {
-        resolver.openInputStream(uri)?.use { input ->
+    private fun readRotationDegrees(bytes: ByteArray): Float = try {
+        ByteArrayInputStream(bytes).use { input ->
             val orientation = ExifInterface(input)
                 .getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
             when (orientation) {
@@ -60,7 +78,7 @@ class ImageCompressor(context: Context) {
                 ExifInterface.ORIENTATION_ROTATE_270 -> 270f
                 else -> 0f
             }
-        } ?: 0f
+        }
     } catch (e: Exception) {
         0f
     }
